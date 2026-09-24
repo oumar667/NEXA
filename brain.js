@@ -354,4 +354,338 @@ const NexaBrain = {
 
     // Si on attendait une réponse mais que l'utilisateur tape une
     // commande de tâches ou d'aide, on abandonne la question en attente
-    if (this.pending && /t[âa]ches?|ma\s+liste|(^|\s)aide(\s|$)
+    if (this.pending && /t[âa]ches?|ma\s+liste|(^|\s)aide(\s|$)/i.test(clean)) {
+      this.pending = null;
+    }
+
+    // --- Réponse à une question posée juste avant ---
+    if (this.pending === "meteo") {
+      this.pending = null;
+      const shortAnswer =
+        clean.split(/\s+/).length <= 4 && !clean.includes("?");
+      if (shortAnswer) {
+        const city = this.cleanCity(clean);
+        if (city) {
+          return await this.weatherReply(city);
+        }
+      }
+      // Sinon, on continue normalement avec les autres règles
+    } else if (this.pending === "wikipedia") {
+      this.pending = null;
+      const shortAnswer =
+        clean.split(/\s+/).length <= 6 && !clean.includes("?");
+      if (shortAnswer) {
+        const topic = this.cleanTopic(clean);
+        if (topic) {
+          return await this.wikiReply(topic);
+        }
+      }
+    }
+
+    // --- Aide : liste des commandes ---
+    if (
+      /^(aide|help|menu|commandes)\s*[?!.]*$/i.test(clean) ||
+      lower.includes("que sais-tu faire") ||
+      lower.includes("que sais tu faire") ||
+      lower.includes("que peux-tu faire") ||
+      lower.includes("que peux tu faire") ||
+      lower.includes("quelles sont tes commandes") ||
+      lower.includes("qu'est-ce que tu sais faire")
+    ) {
+      return this.helpText();
+    }
+
+    // --- Gestion de la clé du modèle IA ---
+    const mentionsKey = /(^|[^a-zà-ÿ])cl[ée]([^a-zà-ÿ]|$)/i.test(clean);
+    if (mentionsKey) {
+      if (typeof NexaAI === "undefined") {
+        return "Mon module IA n'est pas connecté.";
+      }
+
+      // Supprimer la clé
+      if (/supprim|efface|oublie|retire|enl[eè]ve/i.test(lower)) {
+        NexaAI.clearKey();
+        return "C'est fait. J'ai supprimé la clé enregistrée sur cet iPhone. Pour en remettre une, écrivez « Change ma clé ».";
+      }
+
+      // Changer la clé
+      if (/chang|modifi|nouvelle|remplac|ajoute|saisi|entre|mets/i.test(lower)) {
+        const oldKey = NexaAI.getKey();
+        NexaAI.clearKey();
+        const newKey = NexaAI.ensureKey();
+        if (newKey) {
+          return "C'est fait. Votre nouvelle clé est enregistrée sur cet iPhone.";
+        }
+        if (oldKey) {
+          NexaAI.setKey(oldKey);
+          return "Aucune nouvelle clé saisie : je garde l'ancienne.";
+        }
+        return "Aucune clé saisie. Écrivez « Change ma clé » quand vous voulez en enregistrer une.";
+      }
+    }
+
+    // --- Effacer la conversation (garde prénom, ville, notes, tâches) ---
+    if (
+      /(efface|supprime|vide|nettoie|oublie|r[ée]initialise)\s+(?:toute\s+|tout\s+)?(?:la\s+|notre\s+|cette\s+|l')\s*(?:conversation|historique)/i.test(lower)
+    ) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const data = NexaMemory.load();
+      data.history = [];
+      NexaMemory.save(data);
+      return "C'est fait. J'ai effacé l'historique de la conversation. Votre prénom, votre ville, vos notes et vos tâches sont conservés. Rechargez la page pour vider l'écran.";
+    }
+
+    // --- Tool : liste de tâches ---
+    const taskReply = await this.handleTasks(clean);
+    if (taskReply !== null) {
+      return taskReply;
+    }
+
+    // --- Retenir la ville ---
+    const villeMatch =
+      clean.match(/j'habite\s+(?:(?:à|a|en|au|aux|dans)\s+)?([^.,!?]+)/i) ||
+      clean.match(/(?:je vis|je réside|je suis basée?)\s+(?:à|en|au|aux|dans)\s+([^.,!?]+)/i) ||
+      clean.match(/ma ville (?:est|c'est)\s+([^.,!?]+)/i);
+
+    if (villeMatch && !clean.includes("?")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      let raw = villeMatch[1]
+        .split(/\s+(?:et|mais|car)\s+/i)[0]
+        .trim()
+        .slice(0, 60);
+      if (raw) {
+        raw = this.formatPlace(raw);
+        const ville = raw.charAt(0).toUpperCase() + raw.slice(1);
+        NexaMemory.remember("ville", ville);
+        return "C'est noté : votre ville est " + ville + ".";
+      }
+    }
+
+    // --- Retenir une note libre ---
+    const noteMatch = clean.match(
+      /(?:retiens|retenir|souviens-toi|souviens toi|n'oublie pas)\s+(?:que|qu')\s*(.+)/i
+    );
+    if (noteMatch) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const note = noteMatch[1].trim().slice(0, 300);
+      if (!note) {
+        return "Que dois-je retenir ? Dites par exemple : « Retiens que j'aime le café ».";
+      }
+      NexaMemory.remember("note_" + Date.now(), note);
+      return "C'est noté : « " + note + " ». Je m'en souviendrai.";
+    }
+
+    // --- Afficher ce que NEXA retient ---
+    if (
+      lower.includes("que retiens-tu") ||
+      lower.includes("que retiens tu") ||
+      lower.includes("qu'est-ce que tu retiens") ||
+      lower.includes("que sais-tu sur moi") ||
+      lower.includes("que sais tu sur moi") ||
+      lower.includes("que sais-tu de moi") ||
+      lower.includes("que sais tu de moi") ||
+      lower.includes("mes notes")
+    ) {
+      // "oublie mes notes" est traité plus bas
+      if (!lower.includes("oublie")) {
+        if (!hasMemory) {
+          return "Ma mémoire n'est pas encore connectée.";
+        }
+        const name = NexaMemory.recall("prenom");
+        const ville = NexaMemory.recall("ville");
+        const notes = this.getNotes();
+
+        if (!name && !ville && notes.length === 0) {
+          return "Je ne retiens rien pour le moment. Dites-moi par exemple : « Retiens que j'aime le café ».";
+        }
+
+        let answer = "Voici ce que je retiens :";
+        if (name) {
+          answer += "\n- Prénom : " + name;
+        }
+        if (ville) {
+          answer += "\n- Ville : " + ville;
+        }
+        for (const n of notes) {
+          answer += "\n- " + n.text;
+        }
+        return answer;
+      }
+    }
+
+    // --- Oublier les notes ---
+    if (lower.includes("oublie mes notes") || lower.includes("efface mes notes")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const notes = this.getNotes();
+      for (const n of notes) {
+        NexaMemory.forget(n.key);
+      }
+      return "C'est fait. J'ai oublié vos notes (" + notes.length + ").";
+    }
+
+    // --- Oublier la ville ---
+    if (lower.includes("oublie ma ville")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      NexaMemory.forget("ville");
+      return "C'est fait. J'ai oublié votre ville.";
+    }
+
+    // --- Retrouver le prénom ---
+    if (
+      lower.includes("comment je m'appelle") ||
+      lower.includes("quel est mon prénom") ||
+      lower.includes("quel est mon prenom")
+    ) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const name = NexaMemory.recall("prenom");
+      if (name) {
+        return "Vous vous appelez " + name + ".";
+      }
+      return "Je ne connais pas encore votre prénom. Dites-moi : « Je m'appelle ... ».";
+    }
+
+    // --- Oublier tout ---
+    if (lower.includes("oublie tout")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      NexaMemory.clear();
+      return "C'est fait. J'ai tout oublié (prénom, ville, notes et tâches).";
+    }
+
+    if (lower.includes("oublie mon prénom") || lower.includes("oublie mon prenom")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      NexaMemory.forget("prenom");
+      return "C'est fait. J'ai oublié votre prénom.";
+    }
+
+    // --- Retenir le prénom ---
+    const nameMatch = clean.match(
+      /(?:je m'appelle|moi c'est|mon prénom est|mon prenom est)\s+([^\s.,!?]+)/i
+    );
+    if (nameMatch) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const raw = nameMatch[1];
+      const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+      NexaMemory.remember("prenom", name);
+      return "Enchanté " + name + ". Je m'en souviendrai.";
+    }
+
+    // --- Tool : Wikipédia ---
+    if (/wikip[ée]dia/i.test(clean)) {
+      const topic = this.extractWikiQuery(clean);
+      if (!topic) {
+        this.pending = "wikipedia";
+        return "Que voulez-vous que je cherche sur Wikipédia ?";
+      }
+      return await this.wikiReply(topic);
+    }
+
+    // --- Tool : la météo ---
+    const asksWeather =
+      /m[ée]t[ée]o(?![a-zà-ÿ])|quel temps|quelle temp[ée]rature fait/i.test(clean);
+
+    if (asksWeather) {
+      if (/demain|semaine|week-end|weekend/i.test(lower)) {
+        return "Pour l'instant, je sais seulement donner la météo du jour.";
+      }
+
+      let city = this.extractCity(clean);
+
+      if (!city && hasMemory) {
+        city = NexaMemory.recall("ville") || "";
+      }
+
+      if (!city) {
+        this.pending = "meteo";
+        return "Pour quelle ville ? Vous pouvez aussi me dire « J'habite à ... » pour que je m'en souvienne.";
+      }
+
+      return await this.weatherReply(city);
+    }
+
+    // --- Tool : l'heure ---
+    if (lower.includes("quelle heure") || lower.includes("l'heure")) {
+      const r = await this.useTool("heure");
+      if (!r.ok) return r.error;
+      return "Il est " + r.result + ".";
+    }
+
+    // --- Tool : la date ---
+    if (
+      lower.includes("quelle date") ||
+      lower.includes("quel jour") ||
+      lower.includes("date d'aujourd")
+    ) {
+      const r = await this.useTool("date");
+      if (!r.ok) return r.error;
+      return "Nous sommes le " + r.result + ".";
+    }
+
+    // --- Tool : les calculs ---
+    const calcMatch = clean.match(
+      /(?:calcule|calcul|combien font|combien fait|combien vaut)\s*:?\s*(.+)/i
+    );
+    const looksLikeMath =
+      /^[0-9+\-*/().,\s×÷x]+$/i.test(clean) &&
+      /[0-9]/.test(clean) &&
+      /[+\-*/×÷x]/i.test(clean);
+
+    if (calcMatch || looksLikeMath) {
+      const expression = (calcMatch ? calcMatch[1] : clean)
+        .replace(/\?/g, "")
+        .replace(/(\d)\s*x\s*(\d)/gi, "$1*$2")
+        .trim();
+
+      const r = await this.useTool("calcul", { expression: expression });
+
+      if (!r.ok) return r.error;
+
+      if (r.result !== null) {
+        // On affiche la virgule à la française (3,5 au lieu de 3.5)
+        return "Le résultat est " + String(r.result).replace(".", ",") + ".";
+      }
+      if (calcMatch) {
+        return "Je n'ai pas réussi à faire ce calcul. Essayez par exemple : « calcule 12 * 5 + 3 ».";
+      }
+    }
+
+    // --- Salutations ---
+    if (
+      lower.startsWith("bonjour") ||
+      lower.startsWith("salut") ||
+      lower.startsWith("coucou") ||
+      lower.startsWith("hello")
+    ) {
+      const known = hasMemory ? NexaMemory.recall("prenom") : null;
+      if (known) {
+        return "Bonjour " + known + ". Ravi de vous retrouver.";
+      }
+      return "Bonjour. Je suis NEXA. Mon cerveau est en construction, mais je vous écoute.";
+    }
+
+    // --- Identité ---
+    if (lower.includes("qui es-tu") || lower.includes("qui es tu")) {
+      return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
+    }
+
+    // --- Aucune règle ne correspond : on laisse le modèle IA répondre ---
+    return null;
+  }
+};
