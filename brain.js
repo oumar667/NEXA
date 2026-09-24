@@ -1,17 +1,29 @@
 // ============================================
-// NEXA BRAIN - version 0.6
+// NEXA BRAIN - version 0.7
 // Le cerveau de NEXA : il reçoit un message,
 // utilise la Memory, les Tools (via le registre)
 // et le modèle IA, et décide quoi répondre.
-// Nouveautés : météo, ville mémorisée.
+// Nouveautés : ville mieux comprise, Wikipédia,
+// consignes plus strictes pour le modèle IA.
 // ============================================
 
 const NexaBrain = {
-  version: "0.6",
+  version: "0.7",
 
   // Sert à se souvenir qu'on attend une réponse
   // (ex : "Pour quelle ville ?")
   pending: null,
+
+  // Pays reconnus à la fin d'un nom de ville
+  // (sans accents, en minuscules)
+  countries: [
+    "france", "belgique", "suisse", "canada", "luxembourg", "maroc",
+    "algerie", "tunisie", "senegal", "mali", "cameroun", "gabon",
+    "congo", "madagascar", "mauritanie", "guinee", "benin", "togo",
+    "niger", "tchad", "comores", "djibouti", "haiti", "liban",
+    "egypte", "turquie", "espagne", "italie", "allemagne", "portugal",
+    "angleterre", "royaume-uni", "etats-unis", "usa"
+  ],
 
   // Fonction principale : reçoit le texte de l'utilisateur
   // et renvoie la réponse de NEXA.
@@ -57,6 +69,30 @@ const NexaBrain = {
     return notes;
   },
 
+  // "Saint-Louis France" devient "Saint-Louis, France"
+  // (si le dernier mot est un pays connu)
+  formatPlace(str) {
+    const text = (str || "").trim();
+    if (!text) return text;
+
+    // Déjà précisé avec une virgule ou "en / au / aux / dans"
+    if (/,|\s(?:en|au|aux|dans)\s/i.test(text)) return text;
+
+    const words = text.split(/\s+/);
+    if (words.length < 2) return text;
+
+    const last = words[words.length - 1];
+    const lastNorm = last
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (this.countries.includes(lastNorm)) {
+      return words.slice(0, -1).join(" ") + ", " + last;
+    }
+    return text;
+  },
+
   // Nettoie un texte pour ne garder que le nom de la ville
   cleanCity(str) {
     const stopStart = [
@@ -98,9 +134,57 @@ const NexaBrain = {
     return this.cleanCity(match[1]);
   },
 
+  // Nettoie un texte pour ne garder que le sujet d'une recherche
+  cleanTopic(str) {
+    const stopStart = [
+      "cherche", "chercher", "recherche", "rechercher", "trouve", "trouver",
+      "sur", "dans", "que", "qu'est-ce", "qu'est", "dit", "dis", "dis-moi",
+      "moi", "me", "à", "propos", "de", "du", "des", "peux-tu", "peux", "tu",
+      "donne", "donner", "explique", "parle", "parler", "regarde", "va",
+      "svp", "stp", "concernant", "sujet", "info", "infos", "information",
+      "informations", "au", "aux", "ce"
+    ];
+    const stopEnd = [
+      "sur", "dans", "svp", "stp", "s'il", "te", "plaît", "plait",
+      "vous", "merci"
+    ];
+
+    let words = str
+      .replace(/[?!.,;:]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    let removed = 0;
+    while (words.length > 0 && stopStart.includes(words[0].toLowerCase())) {
+      words.shift();
+      removed++;
+    }
+    if (removed > 0 && words.length > 0 && /^d'./i.test(words[0])) {
+      words[0] = words[0].slice(2);
+    }
+    while (words.length > 0 && stopEnd.includes(words[words.length - 1].toLowerCase())) {
+      words.pop();
+    }
+    return words.join(" ").trim();
+  },
+
+  // Trouve le sujet dans une phrase qui parle de Wikipédia
+  extractWikiQuery(clean) {
+    return this.cleanTopic(clean.replace(/wikip[ée]dia/gi, " "));
+  },
+
   // Demande la météo à l'outil et renvoie la phrase
   async weatherReply(city) {
-    const r = await this.useTool("meteo", { city: city });
+    const place = this.formatPlace(city);
+    const r = await this.useTool("meteo", { city: place });
+    if (!r.ok) return r.error;
+    return r.result;
+  },
+
+  // Demande un résumé à l'outil Wikipédia
+  async wikiReply(topic) {
+    const r = await this.useTool("wikipedia", { query: topic });
     if (!r.ok) return r.error;
     return r.result;
   },
@@ -122,7 +206,12 @@ const NexaBrain = {
       "Tu réponds toujours en français, de façon claire, simple et courte, " +
       "car l'écran est celui d'un iPhone. " +
       "Si tu ne sais pas, tu le dis honnêtement. " +
-      "Tu n'as pas accès à Internet et tu ne connais pas l'heure exacte.";
+      "Tu n'as pas accès à Internet et tu ne connais pas l'heure exacte. " +
+      "Tu ne peux rien enregistrer toi-même : si l'utilisateur veut que tu " +
+      "retiennes quelque chose, dis-lui d'écrire « Retiens que ... ». " +
+      "Pour la météo, dis-lui d'écrire « Météo à Paris » (avec sa ville). " +
+      "Pour une recherche, dis-lui d'écrire « Cherche sur Wikipédia ... ». " +
+      "Tu n'utilises jamais de Markdown : pas d'astérisques, pas de titres.";
 
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
     if (name) {
@@ -175,7 +264,7 @@ const NexaBrain = {
     const lower = clean.toLowerCase();
     const hasMemory = typeof NexaMemory !== "undefined";
 
-    // --- Réponse à "Pour quelle ville ?" ---
+    // --- Réponse à une question posée juste avant ---
     if (this.pending === "meteo") {
       this.pending = null;
       const shortAnswer =
@@ -187,6 +276,38 @@ const NexaBrain = {
         }
       }
       // Sinon, on continue normalement avec les autres règles
+    } else if (this.pending === "wikipedia") {
+      this.pending = null;
+      const shortAnswer =
+        clean.split(/\s+/).length <= 6 && !clean.includes("?");
+      if (shortAnswer) {
+        const topic = this.cleanTopic(clean);
+        if (topic) {
+          return await this.wikiReply(topic);
+        }
+      }
+    }
+
+    // --- Retenir la ville ---
+    const villeMatch =
+      clean.match(/j'habite\s+(?:(?:à|a|en|au|aux|dans)\s+)?([^.,!?]+)/i) ||
+      clean.match(/(?:je vis|je réside|je suis basée?)\s+(?:à|en|au|aux|dans)\s+([^.,!?]+)/i) ||
+      clean.match(/ma ville (?:est|c'est)\s+([^.,!?]+)/i);
+
+    if (villeMatch && !clean.includes("?")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      let raw = villeMatch[1]
+        .split(/\s+(?:et|mais|car)\s+/i)[0]
+        .trim()
+        .slice(0, 60);
+      if (raw) {
+        raw = this.formatPlace(raw);
+        const ville = raw.charAt(0).toUpperCase() + raw.slice(1);
+        NexaMemory.remember("ville", ville);
+        return "C'est noté : votre ville est " + ville + ".";
+      }
     }
 
     // --- Retenir une note libre ---
@@ -311,18 +432,14 @@ const NexaBrain = {
       return "Enchanté " + name + ". Je m'en souviendrai.";
     }
 
-    // --- Retenir la ville ---
-    const villeMatch =
-      clean.match(/(?:j'habite|je vis|je suis basé|je suis basée)\s+(?:à|a|en|au|aux)\s+([^.,!?]+)/i) ||
-      clean.match(/ma ville (?:est|c'est)\s+([^.,!?]+)/i);
-    if (villeMatch) {
-      if (!hasMemory) {
-        return "Ma mémoire n'est pas encore connectée.";
+    // --- Tool : Wikipédia ---
+    if (/wikip[ée]dia/i.test(clean)) {
+      const topic = this.extractWikiQuery(clean);
+      if (!topic) {
+        this.pending = "wikipedia";
+        return "Que voulez-vous que je cherche sur Wikipédia ?";
       }
-      const raw = villeMatch[1].trim();
-      const ville = raw.charAt(0).toUpperCase() + raw.slice(1);
-      NexaMemory.remember("ville", ville);
-      return "C'est noté : votre ville est " + ville + ".";
+      return await this.wikiReply(topic);
     }
 
     // --- Tool : la météo ---
