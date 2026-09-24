@@ -4,220 +4,158 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NEXA</title>
-
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-
     body {
-      font-family: Arial, sans-serif;
-      background: #0b0d12;
-      color: white;
-      min-height: 100vh;
-    }
-
-    .app {
-      max-width: 600px;
-      margin: auto;
-      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0b1329;
+      color: #f8fafc;
       display: flex;
       flex-direction: column;
+      height: 100vh;
     }
-
     header {
-      padding: 22px 20px;
-      border-bottom: 1px solid #242731;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      padding: 18px;
+      text-align: center;
+      background-color: #0b1329;
+      border-bottom: 1px solid #1e293b;
     }
-
-    .logo {
-      font-size: 25px;
-      font-weight: bold;
-      letter-spacing: 2px;
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
     }
-
-    .status {
-      font-size: 12px;
-      color: #888;
-    }
-
-    .status.online {
-      color: #4ade80;
-    }
-
-    main {
-      flex: 1;
-      padding: 25px 20px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .welcome {
-      margin-top: 20px;
-      margin-bottom: 25px;
-    }
-
-    .welcome h1 {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
-
-    .welcome p {
-      color: #9296a3;
-      line-height: 1.5;
-    }
-
-    #chat {
+    #chat-container {
       flex: 1;
       overflow-y: auto;
-    }
-
-    .message {
-      margin-bottom: 15px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      line-height: 1.5;
-      max-width: 90%;
-    }
-
-    .user {
-      background: #1d2330;
-      margin-left: auto;
-    }
-
-    .nexa {
-      background: #14171f;
-      border: 1px solid #252a35;
-    }
-
-    .input-area {
+      padding: 16px;
       display: flex;
-      gap: 8px;
-      margin-top: 15px;
+      flex-direction: column;
+      gap: 12px;
     }
-
+    .message {
+      max-width: 82%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      word-wrap: break-word;
+    }
+    .user {
+      align-self: flex-end;
+      background-color: #2563eb;
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+    .nexa {
+      align-self: flex-start;
+      background-color: #1e293b;
+      color: #f1f5f9;
+      border-bottom-left-radius: 4px;
+      border: 1px solid #334155;
+    }
+    #input-container {
+      padding: 12px 16px;
+      background-color: #0b1329;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      gap: 10px;
+    }
     input {
       flex: 1;
-      padding: 15px;
-      border-radius: 14px;
-      border: 1px solid #292e39;
-      background: #11141b;
-      color: white;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+      background-color: #131c31;
+      color: #ffffff;
+      font-size: 0.95rem;
       outline: none;
     }
-
+    input::placeholder {
+      color: #64748b;
+    }
+    input:focus {
+      border-color: #38bdf8;
+    }
     button {
+      padding: 14px 20px;
+      border-radius: 10px;
       border: none;
-      border-radius: 14px;
-      padding: 0 18px;
-      background: white;
-      color: black;
-      font-weight: bold;
+      background-color: #3b82f6;
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
       cursor: pointer;
     }
-
     button:active {
-      transform: scale(0.97);
+      background-color: #2563eb;
     }
   </style>
 </head>
-
 <body>
 
-  <div class="app">
+  <header>
+    <h1>NEXA</h1>
+  </header>
 
-    <header>
-      <div class="logo">NEXA</div>
-      <div class="status" id="status">BRAIN • OFFLINE</div>
-    </header>
+  <div id="chat-container"></div>
 
-    <main>
-
-      <div class="welcome">
-        <h1>Bonjour.</h1>
-        <p>
-          Je suis NEXA. Votre système intelligent personnel.
-        </p>
-      </div>
-
-      <div id="chat"></div>
-
-      <div class="input-area">
-        <input
-          id="messageInput"
-          type="text"
-          placeholder="Écrivez à NEXA..."
-        >
-
-        <button onclick="sendMessage()">Envoyer</button>
-      </div>
-
-    </main>
-
+  <div id="input-container">
+    <input type="text" id="user-input" placeholder="Pose une question à NEXA..." autocomplete="off">
+    <button id="send-btn">Envoyer</button>
   </div>
 
-  <!-- La mémoire de NEXA -->
+  <!-- Chargement des modules -->
   <script src="memory.js"></script>
-
-  <!-- Les outils de NEXA -->
   <script src="tools.js"></script>
-
-  <!-- Le cerveau de NEXA -->
+  <script src="ai.js"></script>
   <script src="brain.js"></script>
 
+  <!-- Gestion des messages -->
   <script>
-    // Si le Brain est bien chargé, on passe le statut en ONLINE
-    const statusEl = document.getElementById("status");
+    const chatContainer = document.getElementById("chat-container");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
 
-    if (typeof NexaBrain !== "undefined") {
-      statusEl.textContent = "BRAIN • ONLINE";
-      statusEl.classList.add("online");
+    function addMessage(text, sender) {
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("message", sender);
+      msgDiv.textContent = text;
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    async function sendMessage() {
+    async function handleSend() {
+      const text = userInput.value.trim();
+      if (!text) return;
 
-      const input = document.getElementById("messageInput");
-      const chat = document.getElementById("chat");
+      addMessage(text, "user");
+      userInput.value = "";
 
-      const message = input.value.trim();
-
-      if (!message) return;
-
-      const userMessage = document.createElement("div");
-      userMessage.className = "message user";
-      userMessage.textContent = message;
-
-      chat.appendChild(userMessage);
-
-      input.value = "";
-
-      const nexaMessage = document.createElement("div");
-      nexaMessage.className = "message nexa";
-
-      if (typeof NexaBrain !== "undefined") {
-        nexaMessage.textContent = await NexaBrain.think(message);
-      } else {
-        nexaMessage.textContent =
-          "Le Brain n'est pas chargé. Vérifiez que brain.js existe.";
-      }
-
-      chat.appendChild(nexaMessage);
-
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    document
-      .getElementById("messageInput")
-      .addEventListener("keydown", function(event) {
-        if (event.key === "Enter") {
-          sendMessage();
+      try {
+        let reply = "";
+        if (typeof NexaBrain !== "undefined" && typeof NexaBrain.think === "function") {
+          reply = await NexaBrain.think(text);
+        } else {
+          reply = "Erreur : le Brain n'est pas prêt.";
         }
-      });
+        addMessage(reply, "nexa");
+      } catch (err) {
+        console.error(err);
+        addMessage("Une erreur est survenue lors de la réponse.", "nexa");
+      }
+    }
+
+    sendBtn.addEventListener("click", handleSend);
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") handleSend();
+    });
   </script>
 
 </body>
+</html>
