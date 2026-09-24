@@ -1,32 +1,25 @@
 // ============================================
-// NEXA BRAIN - version 0.6
+// NEXA BRAIN - version 0.7
 // Le cerveau de NEXA : il reçoit un message,
 // utilise la Memory, les Tools (via le registre)
 // et le modèle IA, et décide quoi répondre.
-// Nouveautés : météo, ville mémorisée.
+// Nouveauté v0.7 : intégration de la recherche Web
 // ============================================
 
 const NexaBrain = {
-  version: "0.6",
+  version: "0.7",
 
-  // Sert à se souvenir qu'on attend une réponse
-  // (ex : "Pour quelle ville ?")
   pending: null,
 
-  // Fonction principale : reçoit le texte de l'utilisateur
-  // et renvoie la réponse de NEXA.
   async think(message) {
     const text = message.trim();
 
-    // 1) Les règles du Brain (prénom, notes, outils...)
     let reply = await this.decide(text);
 
-    // 2) Si aucune règle ne correspond, on demande au modèle IA
     if (reply === null) {
       reply = await this.askAI(text);
     }
 
-    // On garde une trace de la conversation dans la Memory
     if (typeof NexaMemory !== "undefined") {
       NexaMemory.addToHistory("user", text);
       NexaMemory.addToHistory("nexa", reply);
@@ -35,8 +28,6 @@ const NexaBrain = {
     return reply;
   },
 
-  // Utilise un outil du registre.
-  // Renvoie toujours { ok: true/false, result / error }
   async useTool(name, args) {
     if (typeof NexaTools === "undefined" || typeof NexaTools.run !== "function") {
       return { ok: false, error: "Mes outils ne sont pas encore connectés." };
@@ -44,7 +35,6 @@ const NexaBrain = {
     return await NexaTools.run(name, args);
   },
 
-  // Renvoie la liste des notes enregistrées
   getNotes() {
     if (typeof NexaMemory === "undefined") return [];
     const facts = NexaMemory.load().facts;
@@ -57,7 +47,6 @@ const NexaBrain = {
     return notes;
   },
 
-  // Nettoie un texte pour ne garder que le nom de la ville
   cleanCity(str) {
     const stopStart = [
       "fait-il", "fait", "il", "est-il", "à", "a", "de", "du", "des",
@@ -89,7 +78,6 @@ const NexaBrain = {
     return words.join(" ").trim();
   },
 
-  // Trouve la ville dans une phrase sur la météo
   extractCity(clean) {
     const match = clean.match(
       /(?:il fait quel temps|quel temps|m[ée]t[ée]o(?![a-zà-ÿ])|temp[ée]rature)(.*)$/i
@@ -98,14 +86,12 @@ const NexaBrain = {
     return this.cleanCity(match[1]);
   },
 
-  // Demande la météo à l'outil et renvoie la phrase
   async weatherReply(city) {
     const r = await this.useTool("meteo", { city: city });
     if (!r.ok) return r.error;
     return r.result;
   },
 
-  // Envoie la question au modèle IA, avec du contexte
   async askAI(text) {
     if (typeof NexaAI === "undefined") {
       return (
@@ -116,7 +102,6 @@ const NexaBrain = {
 
     const hasMemory = typeof NexaMemory !== "undefined";
 
-    // Les consignes données au modèle
     let system =
       "Tu es NEXA, l'assistant personnel de l'utilisateur. " +
       "Tu réponds toujours en français, de façon claire, simple et courte, " +
@@ -134,7 +119,6 @@ const NexaBrain = {
       system += " Sa ville est " + ville + ".";
     }
 
-    // Les notes que l'utilisateur t'a demandé de retenir
     const notes = this.getNotes();
     if (notes.length > 0) {
       system += " Voici ce que l'utilisateur t'a demandé de retenir :";
@@ -146,7 +130,6 @@ const NexaBrain = {
 
     const messages = [{ role: "system", content: system }];
 
-    // Les derniers messages, pour que NEXA suive la conversation
     if (hasMemory) {
       const recent = NexaMemory.getHistory()
         .filter(function (m) {
@@ -167,15 +150,11 @@ const NexaBrain = {
     return await NexaAI.ask(messages);
   },
 
-  // Décide de la réponse selon le message.
-  // Renvoie null si aucune règle ne correspond.
   async decide(text) {
-    // On remplace les apostrophes de l'iPhone (’) par des normales (')
     const clean = text.replace(/[’‘`]/g, "'");
     const lower = clean.toLowerCase();
     const hasMemory = typeof NexaMemory !== "undefined";
 
-    // --- Réponse à "Pour quelle ville ?" ---
     if (this.pending === "meteo") {
       this.pending = null;
       const shortAnswer =
@@ -186,7 +165,17 @@ const NexaBrain = {
           return await this.weatherReply(city);
         }
       }
-      // Sinon, on continue normalement avec les autres règles
+    }
+
+    // --- Tool : Recherche Web ---
+    const searchMatch = clean.match(
+      /^(?:cherche|recherche|cherche sur le web|trouve-moi|trouve moi)\s+(.+)/i
+    );
+    if (searchMatch) {
+      const query = searchMatch[1].trim();
+      const r = await this.useTool("recherche", { query: query });
+      if (!r.ok) return r.error;
+      return "Voici ce que j'ai trouvé sur le Web :\n\n" + r.result;
     }
 
     // --- Retenir une note libre ---
@@ -205,7 +194,7 @@ const NexaBrain = {
       return "C'est noté : « " + note + " ». Je m'en souviendrai.";
     }
 
-    // --- Afficher ce que NEXA retient ---
+    // --- Afficher la mémoire ---
     if (
       lower.includes("que retiens-tu") ||
       lower.includes("que retiens tu") ||
@@ -216,7 +205,6 @@ const NexaBrain = {
       lower.includes("que sais tu de moi") ||
       lower.includes("mes notes")
     ) {
-      // "oublie mes notes" est traité plus bas
       if (!lower.includes("oublie")) {
         if (!hasMemory) {
           return "Ma mémoire n'est pas encore connectée.";
@@ -243,7 +231,7 @@ const NexaBrain = {
       }
     }
 
-    // --- Oublier les notes ---
+    // --- Oublier notes / ville / prénom ---
     if (lower.includes("oublie mes notes") || lower.includes("efface mes notes")) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
@@ -255,7 +243,6 @@ const NexaBrain = {
       return "C'est fait. J'ai oublié vos notes (" + notes.length + ").";
     }
 
-    // --- Oublier la ville ---
     if (lower.includes("oublie ma ville")) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
@@ -264,7 +251,6 @@ const NexaBrain = {
       return "C'est fait. J'ai oublié votre ville.";
     }
 
-    // --- Retrouver le prénom ---
     if (
       lower.includes("comment je m'appelle") ||
       lower.includes("quel est mon prénom") ||
@@ -280,7 +266,6 @@ const NexaBrain = {
       return "Je ne connais pas encore votre prénom. Dites-moi : « Je m'appelle ... ».";
     }
 
-    // --- Oublier tout ---
     if (lower.includes("oublie tout")) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
@@ -297,7 +282,7 @@ const NexaBrain = {
       return "C'est fait. J'ai oublié votre prénom.";
     }
 
-    // --- Retenir le prénom ---
+    // --- Enregistrer prénom / ville ---
     const nameMatch = clean.match(
       /(?:je m'appelle|moi c'est|mon prénom est|mon prenom est)\s+([^\s.,!?]+)/i
     );
@@ -311,7 +296,6 @@ const NexaBrain = {
       return "Enchanté " + name + ". Je m'en souviendrai.";
     }
 
-    // --- Retenir la ville ---
     const villeMatch =
       clean.match(/(?:j'habite|je vis|je suis basé|je suis basée)\s+(?:à|a|en|au|aux)\s+([^.,!?]+)/i) ||
       clean.match(/ma ville (?:est|c'est)\s+([^.,!?]+)/i);
@@ -325,7 +309,7 @@ const NexaBrain = {
       return "C'est noté : votre ville est " + ville + ".";
     }
 
-    // --- Tool : la météo ---
+    // --- Tool : Météo ---
     const asksWeather =
       /m[ée]t[ée]o(?![a-zà-ÿ])|quel temps|quelle temp[ée]rature fait/i.test(clean);
 
@@ -348,14 +332,13 @@ const NexaBrain = {
       return await this.weatherReply(city);
     }
 
-    // --- Tool : l'heure ---
+    // --- Tool : Heure & Date ---
     if (lower.includes("quelle heure") || lower.includes("l'heure")) {
       const r = await this.useTool("heure");
       if (!r.ok) return r.error;
       return "Il est " + r.result + ".";
     }
 
-    // --- Tool : la date ---
     if (
       lower.includes("quelle date") ||
       lower.includes("quel jour") ||
@@ -366,7 +349,7 @@ const NexaBrain = {
       return "Nous sommes le " + r.result + ".";
     }
 
-    // --- Tool : les calculs ---
+    // --- Tool : Calcul ---
     const calcMatch = clean.match(
       /(?:calcule|calcul|combien font|combien fait|combien vaut)\s*:?\s*(.+)/i
     );
@@ -386,7 +369,6 @@ const NexaBrain = {
       if (!r.ok) return r.error;
 
       if (r.result !== null) {
-        // On affiche la virgule à la française (3,5 au lieu de 3.5)
         return "Le résultat est " + String(r.result).replace(".", ",") + ".";
       }
       if (calcMatch) {
@@ -394,7 +376,7 @@ const NexaBrain = {
       }
     }
 
-    // --- Salutations ---
+    // --- Salutations & Identité ---
     if (
       lower.startsWith("bonjour") ||
       lower.startsWith("salut") ||
@@ -408,12 +390,10 @@ const NexaBrain = {
       return "Bonjour. Je suis NEXA. Mon cerveau est en construction, mais je vous écoute.";
     }
 
-    // --- Identité ---
     if (lower.includes("qui es-tu") || lower.includes("qui es tu")) {
       return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
     }
 
-    // --- Aucune règle ne correspond : on laisse le modèle IA répondre ---
     return null;
   }
 };
