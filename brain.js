@@ -1,13 +1,12 @@
 // ============================================
-// NEXA BRAIN - version 0.7
-// Le cerveau de NEXA : il reçoit un message,
-// utilise la Memory, les Tools (via le registre)
-// et le modèle IA, et décide quoi répondre.
-// Nouveauté v0.7 : intégration de la recherche Web
+// NEXA BRAIN - version 0.8
+// Le cerveau de NEXA
+// Nouveauté v0.8 : Recherche Web automatique 
+// intégrée aux réponses de l'IA (sans mot-clé)
 // ============================================
 
 const NexaBrain = {
-  version: "0.7",
+  version: "0.8",
 
   pending: null,
 
@@ -36,7 +35,7 @@ const NexaBrain = {
   },
 
   getNotes() {
-    if (typeof NexaMemory === "undefined") return [];
+    if (typeof NexaMemory !== "undefined") return [];
     const facts = NexaMemory.load().facts;
     const notes = [];
     for (const key of Object.keys(facts)) {
@@ -102,12 +101,18 @@ const NexaBrain = {
 
     const hasMemory = typeof NexaMemory !== "undefined";
 
+    // Recherche automatique sur le Web pour enrichir la réponse de l'IA
+    let webContext = "";
+    const searchRes = await this.useTool("recherche", { query: text });
+    if (searchRes.ok && searchRes.result) {
+      webContext = "\n- Informations récentes trouvées sur le Web :\n" + searchRes.result;
+    }
+
     let system =
       "Tu es NEXA, l'assistant personnel de l'utilisateur. " +
       "Tu réponds toujours en français, de façon claire, simple et courte, " +
       "car l'écran est celui d'un iPhone. " +
-      "Si tu ne sais pas, tu le dis honnêtement. " +
-      "Tu n'as pas accès à Internet et tu ne connais pas l'heure exacte.";
+      "Utilise les informations du Web fournies si elles permettent de répondre à la question.";
 
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
     if (name) {
@@ -121,11 +126,14 @@ const NexaBrain = {
 
     const notes = this.getNotes();
     if (notes.length > 0) {
-      system += " Voici ce que l'utilisateur t'a demandé de retenir :";
+      system += " Ce que l'utilisateur t'a demandé de retenir :";
       for (const n of notes) {
         system += " - " + n.text + ".";
       }
-      system += " Utilise ces informations quand c'est pertinent.";
+    }
+
+    if (webContext) {
+      system += webContext;
     }
 
     const messages = [{ role: "system", content: system }];
@@ -165,17 +173,6 @@ const NexaBrain = {
           return await this.weatherReply(city);
         }
       }
-    }
-
-    // --- Tool : Recherche Web ---
-    const searchMatch = clean.match(
-      /^(?:cherche|recherche|cherche sur le web|trouve-moi|trouve moi)\s+(.+)/i
-    );
-    if (searchMatch) {
-      const query = searchMatch[1].trim();
-      const r = await this.useTool("recherche", { query: query });
-      if (!r.ok) return r.error;
-      return "Voici ce que j'ai trouvé sur le Web :\n\n" + r.result;
     }
 
     // --- Retenir une note libre ---
