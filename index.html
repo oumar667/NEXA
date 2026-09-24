@@ -46,6 +46,10 @@
       color: #888;
     }
 
+    .status.online {
+      color: #4ade80;
+    }
+
     main {
       flex: 1;
       padding: 25px 20px;
@@ -129,7 +133,7 @@
 
     <header>
       <div class="logo">NEXA</div>
-      <div class="status">BRAIN • OFFLINE</div>
+      <div class="status" id="status">BRAIN • OFFLINE</div>
     </header>
 
     <main>
@@ -157,8 +161,19 @@
 
   </div>
 
+  <!-- Le cerveau de NEXA -->
+  <script src="brain.js"></script>
+
   <script>
-    function sendMessage() {
+    // Si le Brain est bien chargé, on passe le statut en ONLINE
+    const statusEl = document.getElementById("status");
+
+    if (typeof NexaBrain !== "undefined") {
+      statusEl.textContent = "BRAIN • ONLINE";
+      statusEl.classList.add("online");
+    }
+
+    async function sendMessage() {
 
       const input = document.getElementById("messageInput");
       const chat = document.getElementById("chat");
@@ -178,8 +193,12 @@
       const nexaMessage = document.createElement("div");
       nexaMessage.className = "message nexa";
 
-      nexaMessage.textContent =
-        "Votre message a bien été reçu. Le moteur IA de NEXA n'est pas encore connecté.";
+      if (typeof NexaBrain !== "undefined") {
+        nexaMessage.textContent = await NexaBrain.think(message);
+      } else {
+        nexaMessage.textContent =
+          "Le Brain n'est pas chargé. Vérifiez que brain.js existe.";
+      }
 
       chat.appendChild(nexaMessage);
 
