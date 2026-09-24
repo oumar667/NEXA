@@ -1,12 +1,11 @@
 // ============================================
-// NEXA TOOLS - version 0.3
+// NEXA TOOLS - version 0.4
 // Registre des outils disponibles pour le Brain
 // ============================================
 
 const NexaTools = {
-  version: "0.3",
+  version: "0.4",
 
-  // Exécute un outil par son nom
   async run(name, args = {}) {
     switch (name) {
       case "heure":
@@ -22,13 +21,11 @@ const NexaTools = {
     }
   },
 
-  // 1) L'heure actuelle
   getTime() {
     const now = new Date();
     return now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   },
 
-  // 2) La date du jour
   getDate() {
     const now = new Date();
     return now.toLocaleDateString("fr-FR", {
@@ -39,7 +36,6 @@ const NexaTools = {
     });
   },
 
-  // 3) Calculateur mathématique sécurisé
   calculate(expression) {
     if (!expression) return null;
     try {
@@ -52,7 +48,6 @@ const NexaTools = {
     }
   },
 
-  // 4) Météo en temps réel (wttr.in)
   async getWeather(city) {
     if (!city) {
       return { ok: false, error: "Veuillez préciser une ville." };
@@ -60,7 +55,6 @@ const NexaTools = {
 
     try {
       const cleanCity = encodeURIComponent(city.trim());
-      // Requête au service météo gratuit en français
       const response = await fetch(`https://wttr.in/${cleanCity}?format=j1&lang=fr`);
 
       if (!response.ok) {
@@ -69,11 +63,19 @@ const NexaTools = {
 
       const data = await response.json();
       const current = data.current_condition[0];
+      const area = data.nearest_area ? data.nearest_area[0] : null;
+
+      const exactCity = area && area.areaName ? area.areaName[0].value : city;
+      const country = area && area.country ? area.country[0].value : "";
       const temp = current.temp_C;
       const desc = current.lang_fr ? current.lang_fr[0].value : current.weatherDesc[0].value;
       const feelsLike = current.FeelsLikeC;
+      const humidity = current.humidity;
+      const wind = current.windspeedKmph;
 
-      const result = `À ${city}, il fait actuellement ${temp}°C (${desc.toLowerCase()}), ressenti ${feelsLike}°C.`;
+      const locationStr = country ? `${exactCity} (${country})` : exactCity;
+      const result = `Météo à ${locationStr} : ${temp}°C (${desc.toLowerCase()}), ressenti ${feelsLike}°C. Vent : ${wind} km/h, humidité : ${humidity}%.`;
+
       return { ok: true, result: result };
     } catch (err) {
       console.error(err);
