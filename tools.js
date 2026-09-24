@@ -1,12 +1,12 @@
 // ============================================
-// NEXA TOOLS - version 0.3.1
+// NEXA TOOLS - version 0.4
 // Les capacités de NEXA.
 // Registre d'outils + météo (avec choix du pays)
-// + recherche Wikipédia.
+// + recherche Wikipédia + liste de tâches.
 // ============================================
 
 const NexaTools = {
-  version: "0.3.1",
+  version: "0.4",
 
   // --------------------------------------------
   // LE REGISTRE : la liste des outils disponibles
@@ -371,6 +371,106 @@ const NexaTools = {
     } catch (e) {
       return "Impossible de joindre Wikipédia. Vérifiez votre connexion.";
     }
+  },
+
+  // --------------------------------------------
+  // OUTIL : la liste de tâches (gardée dans la Memory)
+  // action : "add", "list", "done", "delete", "clear"
+  // --------------------------------------------
+  tasksKey: "tasks",
+
+  // Lit la liste de tâches (null si la Memory n'est pas chargée)
+  loadTasks() {
+    if (typeof NexaMemory === "undefined") return null;
+    const list = NexaMemory.recall(this.tasksKey);
+    return Array.isArray(list) ? list : [];
+  },
+
+  // Enregistre la liste de tâches
+  saveTasks(list) {
+    if (typeof NexaMemory === "undefined") return false;
+    return NexaMemory.remember(this.tasksKey, list);
+  },
+
+  // Met la liste en forme : "1. ☐ Appeler le médecin"
+  formatTasks(list) {
+    return list
+      .map(function (t, i) {
+        return (i + 1) + ". " + (t.done ? "✅" : "☐") + " " + t.text;
+      })
+      .join("\n");
+  },
+
+  manageTasks(action, text, number) {
+    const list = this.loadTasks();
+    if (list === null) {
+      return "Ma mémoire n'est pas encore connectée.";
+    }
+
+    // Ajouter une tâche
+    if (action === "add") {
+      let t = (text || "").trim().slice(0, 200);
+      if (!t) {
+        return "Quelle tâche voulez-vous ajouter ?";
+      }
+      if (list.length >= 50) {
+        return "Votre liste est pleine (50 tâches). Terminez ou supprimez-en avant d'en ajouter.";
+      }
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+      list.push({
+        text: t,
+        done: false,
+        created: new Date().toISOString()
+      });
+      this.saveTasks(list);
+      return "C'est ajouté : « " + t + " ». Vous avez " + list.length + " tâche(s) dans votre liste.";
+    }
+
+    // Afficher la liste
+    if (action === "list") {
+      if (list.length === 0) {
+        return "Votre liste est vide. Dites par exemple : « Ajoute une tâche : appeler le médecin ».";
+      }
+      const remaining = list.filter(function (t) {
+        return !t.done;
+      }).length;
+      return (
+        "Vos tâches (" + remaining + " à faire sur " + list.length + ") :\n" +
+        this.formatTasks(list)
+      );
+    }
+
+    // Vider toute la liste
+    if (action === "clear") {
+      const count = list.length;
+      this.saveTasks([]);
+      return "C'est fait. J'ai vidé votre liste (" + count + " tâche(s) supprimée(s)).";
+    }
+
+    // Terminer ou supprimer : on a besoin d'un numéro valide
+    if (action === "done" || action === "delete") {
+      const n = Number(number);
+      if (!Number.isInteger(n) || n < 1 || n > list.length) {
+        return "Je ne trouve pas la tâche " + number + ". Écrivez « Mes tâches » pour voir la liste.";
+      }
+
+      const task = list[n - 1];
+
+      if (action === "done") {
+        if (task.done) {
+          return "La tâche " + n + " est déjà terminée : « " + task.text + " ».";
+        }
+        task.done = true;
+        this.saveTasks(list);
+        return "Bien joué ! Tâche " + n + " terminée : « " + task.text + " ».";
+      }
+
+      list.splice(n - 1, 1);
+      this.saveTasks(list);
+      return "C'est supprimé : « " + task.text + " ». Il reste " + list.length + " tâche(s).";
+    }
+
+    return "Je ne sais pas faire cette action sur la liste de tâches.";
   }
 };
 
@@ -395,4 +495,8 @@ NexaTools.register("meteo", "Donne la météo d'une ville (argument : city).", f
 
 NexaTools.register("wikipedia", "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).", function (args) {
   return NexaTools.searchWikipedia(args.query || "");
+});
+
+NexaTools.register("taches", "Gère la liste de tâches (arguments : action = add, list, done, delete ou clear ; text ; number).", function (args) {
+  return NexaTools.manageTasks(args.action, args.text, args.number);
 });
