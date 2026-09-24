@@ -1,10 +1,10 @@
 // ============================================
-// NEXA BRAIN - version 1.2
-// Correction du crash (sécurisation de la mémoire et des outils).
+// NEXA BRAIN - version 1.3
+// Interception intelligente et tolérante du Calendrier
 // ============================================
 
 const NexaBrain = {
-    version: "1.2",
+    version: "1.3",
 
     getTools() { try { return NexaTools; } catch(e) { try { return nexaTools; } catch(e2) { return null; } } },
     getMemory() { try { return NexaMemory; } catch(e) { try { return nexaMemory; } catch(e2) { return null; } } },
@@ -19,13 +19,7 @@ const NexaBrain = {
 
         // 1. Commandes système
         if (input === "aide") {
-            return `Voici ce que je peux faire :
-- Mémoire : "Je m'appelle [Nom]", "J'habite à [Ville]", "Note : [Texte]"
-- Tâches : "Ajoute une tâche : [Texte]", "Mes tâches", "Termine la tâche 1"
-- Outils : "Heure", "Date", "Calcule [X]", "Météo à [Ville]", "Wiki : [Recherche]"
-- Calendrier (IA) : "Ajoute un RDV chez le dentiste demain à 15h"
-- Vision/Fichiers (IA) : Joins une photo/fichier via le bouton + et pose une question
-- Système : "Change ma clé", "Efface la conversation", "Oublie tout"`;
+            return `Voici ce que je peux faire :\n- Mémoire : "Je m'appelle [Nom]", "J'habite à [Ville]", "Note : [Texte]"\n- Tâches : "Ajoute une tâche : [Texte]", "Mes tâches", "Termine la tâche 1"\n- Outils : "Heure", "Date", "Calcule [X]", "Météo à [Ville]", "Wiki : [Recherche]"\n- Calendrier (IA) : "Ajoute un RDV chez le dentiste demain à 15h"\n- Vision/Fichiers (IA) : Joins une photo/fichier via le bouton + et pose une question\n- Système : "Change ma clé", "Efface la conversation", "Oublie tout"`;
         }
 
         if (input.includes("change ma cl") || input.includes("changer ma cl") || input.includes("supprime ma cl")) {
@@ -101,7 +95,6 @@ const NexaBrain = {
         if (!ai) return "L'outil IA n'est pas connecté. (Le fichier ai.js est introuvable)";
 
         try {
-            // Lecture sécurisée du profil (contournement du crash)
             let context = "";
             try {
                 const n = localStorage.getItem("nexa_name") || "";
@@ -145,24 +138,36 @@ Exemple : [CALENDAR: RDV Dentiste | 2024-12-15 | 14:30 | Cabinet centre ville]`;
 
             const aiResponse = await ai.ask(messages);
 
-            if (aiResponse && aiResponse.includes("[CALENDAR:")) {
+            // INTERCEPTION INTELLIGENTE DU CALENDRIER
+            if (aiResponse && aiResponse.includes("CALENDAR:")) {
                 try {
-                    const regex = /\[CALENDAR:\s*(.*?)\s*\Vert{}\s*(.*?)\s*\Vert{}\s*(.*?)\s*\Vert{}\s*(.*?)\]/;
-                    const match = aiResponse.match(regex);
-                    if (match && tools && typeof tools.createCalendarEvent === "function") {
-                        const title = match[1].trim();
-                        const date = match[2].trim();
-                        const time = match[3].trim();
-                        const desc = match[4].trim();
+                    // On repère où commence le mot CALENDAR:
+                    const startIndex = aiResponse.indexOf("CALENDAR:");
+                    // On récupère tout ce qu'il y a après
+                    let data = aiResponse.substring(startIndex + 9);
+                    // On nettoie les crochets éventuels qui traîneraient à la fin
+                    data = data.replace(/\]/g, "").trim();
+                    
+                    // On découpe en utilisant la barre verticale |
+                    const parts = data.split("|").map(p => p.trim());
+                    
+                    // Si on a bien Titre, Date et Heure
+                    if (parts.length >= 3 && tools && typeof tools.createCalendarEvent === "function") {
+                        const title = parts[0];
+                        const date = parts[1];
+                        const time = parts[2];
+                        const desc = parts[3] || "";
+                        
                         return "J'ai préparé ton événement :\n" + tools.createCalendarEvent(title, date, time, desc);
                     }
-                } catch (e) {}
+                } catch (e) {
+                    // En cas d'erreur de découpage, on laisse l'IA afficher son texte normal
+                }
             }
 
             return aiResponse;
 
         } catch (error) {
-            // Si ça plante à nouveau, on verra exactement la ligne et la raison !
             return "Erreur détaillée du Cerveau : " + error.message;
         }
     }
