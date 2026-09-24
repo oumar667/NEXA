@@ -6,159 +6,48 @@
   <title>NEXA</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      background: #0b0d12;
-      color: white;
-      min-height: 100vh;
-    }
-
-    .app {
-      max-width: 600px;
-      margin: auto;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    header {
-      padding: 22px 20px;
-      border-bottom: 1px solid #242731;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo {
-      font-size: 25px;
-      font-weight: bold;
-      letter-spacing: 2px;
-    }
-
-    .status {
-      font-size: 12px;
-      color: #888;
-      text-align: right;
-    }
-
-    .status.online {
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #0b0d12; color: white; min-height: 100vh; }
+    .app { max-width: 600px; margin: auto; min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 22px 20px; border-bottom: 1px solid #242731; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .logo { font-size: 25px; font-weight: bold; letter-spacing: 2px; }
+    .status { font-size: 12px; color: #888; text-align: right; }
+    .status.online { color: #4ade80; }
+    main { flex: 1; padding: 25px 20px; display: flex; flex-direction: column; }
+    .welcome { margin-top: 20px; margin-bottom: 25px; }
+    .welcome h1 { font-size: 32px; margin-bottom: 10px; }
+    .welcome p { color: #9296a3; line-height: 1.5; }
+    #chat { flex: 1; overflow-y: auto; }
+    .message { margin-bottom: 15px; padding: 14px 16px; border-radius: 16px; line-height: 1.5; max-width: 90%; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message a { color: #4ade80; text-decoration: underline; }
+    .user { background: #1d2330; margin-left: auto; }
+    .nexa { background: #14171f; border: 1px solid #252a35; }
+    .thinking { color: #9296a3; font-style: italic; }
+    
+    #attachmentPreview {
+      display: none;
       color: #4ade80;
+      font-size: 13px;
+      margin-bottom: 8px;
+      padding-left: 5px;
     }
 
-    main {
-      flex: 1;
-      padding: 25px 20px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .welcome {
-      margin-top: 20px;
-      margin-bottom: 25px;
-    }
-
-    .welcome h1 {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
-
-    .welcome p {
-      color: #9296a3;
-      line-height: 1.5;
-    }
-
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .message {
-      margin-bottom: 15px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      line-height: 1.5;
-      max-width: 90%;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .message a {
-      color: #4ade80;
-      text-decoration: underline;
-    }
-
-    .user {
-      background: #1d2330;
-      margin-left: auto;
-    }
-
-    .nexa {
-      background: #14171f;
-      border: 1px solid #252a35;
-    }
-
-    .thinking {
-      color: #9296a3;
-      font-style: italic;
-    }
-
-    .input-area {
-      display: flex;
-      gap: 8px;
-      margin-top: 15px;
-    }
-
-    #attachBtn {
-      background: #292e39;
-      color: white;
-      font-size: 24px;
-      padding: 0 15px;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 15px;
-      border-radius: 14px;
-      border: 1px solid #292e39;
-      background: #11141b;
-      color: white;
-      outline: none;
-    }
-
-    button {
-      border: none;
-      border-radius: 14px;
-      padding: 0 18px;
-      background: white;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button:active {
-      transform: scale(0.97);
-    }
+    .input-area { display: flex; gap: 8px; }
+    #attachBtn { background: #292e39; color: white; font-size: 24px; padding: 0 15px; }
+    input[type="text"] { flex: 1; padding: 15px; border-radius: 14px; border: 1px solid #292e39; background: #11141b; color: white; outline: none; }
+    button { border: none; border-radius: 14px; padding: 0 18px; background: white; color: black; font-weight: bold; cursor: pointer; }
+    button:active { transform: scale(0.97); }
   </style>
 </head>
-
 <body>
 
   <div class="app">
-
     <header>
       <div class="logo">NEXA</div>
       <div class="status" id="status">BRAIN • CHARGEMENT…</div>
     </header>
 
     <main>
-
       <div class="welcome">
         <h1>Bonjour.</h1>
         <p>Je suis NEXA. Votre système intelligent personnel.</p>
@@ -166,21 +55,23 @@
 
       <div id="chat"></div>
 
-      <input type="file" id="fileInput" style="display: none;" accept="image/*, .txt, .pdf" onchange="handleFileSelect(event)">
+      <input type="file" id="fileInput" style="display: none;" accept="image/*, .txt, .pdf, .csv" onchange="handleFileSelect(event)">
 
+      <div id="attachmentPreview"></div>
+      
       <div class="input-area">
         <button id="attachBtn" onclick="document.getElementById('fileInput').click()">+</button>
         <input id="messageInput" type="text" placeholder="Écrivez à NEXA...">
         <button onclick="sendMessage()">Envoyer</button>
       </div>
-
     </main>
-
   </div>
 
   <script>
     const statusEl = document.getElementById("status");
     const chat = document.getElementById("chat");
+    const previewEl = document.getElementById("attachmentPreview");
+    let currentAttachment = null;
 
     const NEXA_FILES = ["memory.js", "tools.js", "ai.js", "brain.js"];
 
@@ -189,56 +80,68 @@
         const script = document.createElement("script");
         script.src = name + "?t=" + Date.now();
         script.onload = resolve;
-        script.onerror = function () {
-          reject(name);
-        };
+        script.onerror = reject;
         document.head.appendChild(script);
       });
     }
 
     function restoreHistory() {
-      if (typeof NexaMemory === "undefined") return;
+      const memoryObj = window.NexaMemory || window.nexaMemory;
+      if (!memoryObj) return;
 
-      const history = NexaMemory.getHistory();
-
+      const history = memoryObj.getHistory();
       for (const item of history) {
         const div = document.createElement("div");
         div.className = "message " + (item.role === "user" ? "user" : "nexa");
-        
         if (item.role === "user") {
           div.textContent = item.text;
         } else {
-          div.innerHTML = item.text; // Permet à NEXA d'afficher des liens
+          div.innerHTML = item.text;
         }
-        
         chat.appendChild(div);
       }
     }
 
     async function boot() {
       for (const file of NEXA_FILES) {
-        try {
-          await loadScript(file);
-        } catch (e) {}
+        try { await loadScript(file); } catch (e) {}
       }
 
-      if (typeof NexaBrain !== "undefined") {
-        statusEl.textContent = "BRAIN v" + NexaBrain.version + " • ONLINE";
+      const brainObj = window.NexaBrain || window.nexaBrain;
+      if (brainObj) {
+        statusEl.textContent = "BRAIN v" + brainObj.version + " • ONLINE";
         statusEl.classList.add("online");
       } else {
         statusEl.textContent = "BRAIN • OFFLINE";
       }
-
       restoreHistory();
     }
 
     const ready = boot();
 
-    function handleFileSelect(event) {
+    async function handleFileSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
-      alert("Fichier détecté : " + file.name + "\n(Le traitement arrive à la prochaine étape !)");
-      event.target.value = ""; // Réinitialise l'input
+
+      const toolsObj = window.NexaTools || window.nexaTools;
+      if (!toolsObj) {
+        alert("Les outils ne sont pas encore chargés.");
+        return;
+      }
+
+      previewEl.style.display = "block";
+      previewEl.textContent = "Lecture de " + file.name + "...";
+
+      const result = await toolsObj.processLocalFile(file);
+
+      if (result.error) {
+        previewEl.textContent = "❌ Erreur : " + result.error;
+        currentAttachment = null;
+      } else {
+        currentAttachment = result;
+        previewEl.textContent = "📎 " + file.name + " (Prêt)";
+      }
+      event.target.value = ""; 
     }
 
     async function sendMessage() {
@@ -247,14 +150,22 @@
       const input = document.getElementById("messageInput");
       const message = input.value.trim();
 
-      if (!message) return;
+      if (!message && !currentAttachment) return;
 
       const userMessage = document.createElement("div");
       userMessage.className = "message user";
-      userMessage.textContent = message;
+      
+      let displayMsg = message;
+      if (currentAttachment) {
+        displayMsg = (message ? message + "\n\n" : "") + "[Fichier joint : " + currentAttachment.name + "]";
+      }
+      userMessage.textContent = displayMsg;
       chat.appendChild(userMessage);
 
       input.value = "";
+      const attachmentToSend = currentAttachment;
+      currentAttachment = null;
+      previewEl.style.display = "none";
 
       const nexaMessage = document.createElement("div");
       nexaMessage.className = "message nexa thinking";
@@ -263,27 +174,27 @@
       nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
 
       let reply;
-      if (typeof NexaBrain !== "undefined") {
+      const brainObj = window.NexaBrain || window.nexaBrain;
+      
+      if (brainObj) {
         try {
-          reply = await NexaBrain.think(message);
+          const thinkFunc = brainObj.think || brainObj.processInput;
+          reply = await thinkFunc.call(brainObj, message, attachmentToSend);
         } catch (e) {
           reply = "Une erreur est survenue dans mon Brain. Réessayez.";
         }
       } else {
-        reply = "Le Brain n'est pas chargé. Vérifiez que brain.js existe.";
+        reply = "Le Brain n'est pas chargé.";
       }
 
       nexaMessage.classList.remove("thinking");
-      nexaMessage.innerHTML = reply; // Permet à NEXA d'afficher des liens
+      nexaMessage.innerHTML = reply;
       nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
     }
 
     document.getElementById("messageInput").addEventListener("keydown", function(event) {
-      if (event.key === "Enter") {
-        sendMessage();
-      }
+      if (event.key === "Enter") sendMessage();
     });
   </script>
-
 </body>
 </html>
