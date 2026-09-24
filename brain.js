@@ -1,11 +1,12 @@
 // ============================================
-// NEXA BRAIN - version 0.2
+// NEXA BRAIN - version 0.3
 // Le cerveau de NEXA : il reçoit un message,
-// utilise la Memory, et décide quoi répondre.
+// utilise la Memory et les Tools, et décide
+// quoi répondre.
 // ============================================
 
 const NexaBrain = {
-  version: "0.2",
+  version: "0.3",
 
   // Fonction principale : reçoit le texte de l'utilisateur
   // et renvoie la réponse de NEXA.
@@ -28,6 +29,7 @@ const NexaBrain = {
     const clean = text.replace(/[’‘`]/g, "'");
     const lower = clean.toLowerCase();
     const hasMemory = typeof NexaMemory !== "undefined";
+    const hasTools = typeof NexaTools !== "undefined";
 
     // --- Retrouver le prénom ---
     if (
@@ -74,6 +76,55 @@ const NexaBrain = {
       const name = raw.charAt(0).toUpperCase() + raw.slice(1);
       NexaMemory.remember("prenom", name);
       return "Enchanté " + name + ". Je m'en souviendrai.";
+    }
+
+    // --- Tool : l'heure ---
+    if (lower.includes("quelle heure") || lower.includes("l'heure")) {
+      if (!hasTools) {
+        return "Mes outils ne sont pas encore connectés.";
+      }
+      return "Il est " + NexaTools.getTime() + ".";
+    }
+
+    // --- Tool : la date ---
+    if (
+      lower.includes("quelle date") ||
+      lower.includes("quel jour") ||
+      lower.includes("date d'aujourd")
+    ) {
+      if (!hasTools) {
+        return "Mes outils ne sont pas encore connectés.";
+      }
+      return "Nous sommes le " + NexaTools.getDate() + ".";
+    }
+
+    // --- Tool : les calculs ---
+    const calcMatch = clean.match(
+      /(?:calcule|calcul|combien font|combien fait|combien vaut)\s*:?\s*(.+)/i
+    );
+    const looksLikeMath =
+      /^[0-9+\-*/().,\s×÷x]+$/i.test(clean) &&
+      /[0-9]/.test(clean) &&
+      /[+\-*/×÷x]/i.test(clean);
+
+    if (calcMatch || looksLikeMath) {
+      if (!hasTools) {
+        return "Mes outils ne sont pas encore connectés.";
+      }
+      const expression = (calcMatch ? calcMatch[1] : clean)
+        .replace(/\?/g, "")
+        .replace(/(\d)\s*x\s*(\d)/gi, "$1*$2")
+        .trim();
+
+      const result = NexaTools.calculate(expression);
+
+      if (result !== null) {
+        // On affiche la virgule à la française (3,5 au lieu de 3.5)
+        return "Le résultat est " + String(result).replace(".", ",") + ".";
+      }
+      if (calcMatch) {
+        return "Je n'ai pas réussi à faire ce calcul. Essayez par exemple : « calcule 12 * 5 + 3 ».";
+      }
     }
 
     // --- Salutations ---
