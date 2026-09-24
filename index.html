@@ -1,200 +1,363 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEXA</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXA</title>
+    <style>
+        :root {
+            --bg-color: #131314;
+            --surface-color: #1e1f20;
+            --surface-hover: #2b2c2e;
+            --text-main: #e3e3e3;
+            --text-secondary: #8e918f;
+            --accent-color: #a8c7fa;
+            --accent-gradient: linear-gradient(135deg, #9bbcf2 0%, #c4b5fd 100%);
+            --border-color: #333538;
+        }
 
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #0b0d12; color: white; min-height: 100vh; }
-    .app { max-width: 600px; margin: auto; min-height: 100vh; display: flex; flex-direction: column; }
-    header { padding: 22px 20px; border-bottom: 1px solid #242731; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .logo { font-size: 25px; font-weight: bold; letter-spacing: 2px; }
-    .status { font-size: 12px; color: #888; text-align: right; }
-    .status.online { color: #4ade80; }
-    main { flex: 1; padding: 25px 20px; display: flex; flex-direction: column; }
-    .welcome { margin-top: 20px; margin-bottom: 25px; }
-    .welcome h1 { font-size: 32px; margin-bottom: 10px; }
-    .welcome p { color: #9296a3; line-height: 1.5; }
-    #chat { flex: 1; overflow-y: auto; }
-    .message { margin-bottom: 15px; padding: 14px 16px; border-radius: 16px; line-height: 1.5; max-width: 90%; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .message a { color: #4ade80; text-decoration: underline; }
-    .user { background: #1d2330; margin-left: auto; }
-    .nexa { background: #14171f; border: 1px solid #252a35; }
-    .thinking { color: #9296a3; font-style: italic; }
-    
-    #attachmentPreview {
-      display: none;
-      color: #4ade80;
-      font-size: 13px;
-      margin-bottom: 8px;
-      padding-left: 5px;
-    }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-    .input-area { display: flex; gap: 8px; }
-    #attachBtn { background: #292e39; color: white; font-size: 24px; padding: 0 15px; }
-    input[type="text"] { flex: 1; padding: 15px; border-radius: 14px; border: 1px solid #292e39; background: #11141b; color: white; outline: none; }
-    button { border: none; border-radius: 14px; padding: 0 18px; background: white; color: black; font-weight: bold; cursor: pointer; }
-    button:active { transform: scale(0.97); }
-  </style>
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        /* En-tête minimaliste style Gemini */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            letter-spacing: -0.5px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            background: var(--surface-color);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+
+        /* Zone de discussion */
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            scroll-behavior: smooth;
+        }
+
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            flex: 1;
+            max-width: 600px;
+            margin: auto;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .welcome-screen h1 {
+            font-size: 2.2rem;
+            font-weight: 500;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+
+        .welcome-screen p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.4;
+        }
+
+        /* Bulles de messages */
+        .message {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background-color: var(--surface-color);
+            color: var(--text-main);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .ai-message {
+            background-color: transparent;
+            color: var(--text-main);
+            align-self: flex-start;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        /* Barre de saisie flottante */
+        .input-area {
+            padding: 16px 20px 24px 20px;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-box-wrapper {
+            display: flex;
+            align-items: center;
+            background-color: var(--surface-color);
+            border-radius: 28px;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.2s;
+        }
+
+        .input-box-wrapper:focus-within {
+            border-color: var(--text-secondary);
+        }
+
+        #file-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.3rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        #file-btn:hover {
+            background-color: var(--surface-hover);
+            color: var(--text-main);
+        }
+
+        #user-input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            padding: 8px 12px;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+        }
+
+        #user-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        #send-btn {
+            background-color: var(--text-main);
+            color: var(--bg-color);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        #send-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .attachment-preview {
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            background: rgba(168, 199, 250, 0.1);
+            padding: 4px 10px;
+            border-radius: 8px;
+            align-self: flex-start;
+            display: none;
+        }
+    </style>
 </head>
 <body>
 
-  <div class="app">
     <header>
-      <div class="logo">NEXA</div>
-      <div class="status" id="status">BRAIN • CHARGEMENT…</div>
+        <div class="logo-area">
+            <span>✨</span> NEXA
+        </div>
+        <div id="status" class="status-badge">PRÊT</div>
     </header>
 
-    <main>
-      <div class="welcome">
-        <h1>Bonjour.</h1>
-        <p>Je suis NEXA. Votre système intelligent personnel.</p>
-      </div>
+    <div id="chat-container">
+        <div class="welcome-screen">
+            <h1>Bonjour.</h1>
+            <p>Je suis NEXA. Votre espace de travail intelligent et personnel.</p>
+        </div>
+    </div>
 
-      <div id="chat"></div>
+    <div class="input-area">
+        <div id="attachment-preview" class="attachment-preview"></div>
+        <div class="input-box-wrapper">
+            <button id="file-btn" title="Joindre un fichier">+</button>
+            <input type="file" id="file-input" style="display: none;" accept="image/*,.txt,.pdf,.json,.js,.html,.css">
+            <textarea id="user-input" rows="1" placeholder="Posez une question à NEXA..."></textarea>
+            <button id="send-btn" title="Envoyer">↑</button>
+        </div>
+    </div>
 
-      <input type="file" id="fileInput" style="display: none;" accept="image/*, .txt, .pdf, .csv" onchange="handleFileSelect(event)">
+    <!-- Scripts de l'application -->
+    <script src="memory.js"></script>
+    <script src="tools.js"></script>
+    <script src="ai.js"></script>
+    <script src="brain.js"></script>
 
-      <div id="attachmentPreview"></div>
-      
-      <div class="input-area">
-        <button id="attachBtn" onclick="document.getElementById('fileInput').click()">+</button>
-        <input id="messageInput" type="text" placeholder="Écrivez à NEXA...">
-        <button onclick="sendMessage()">Envoyer</button>
-      </div>
-    </main>
-  </div>
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const fileBtn = document.getElementById('file-btn');
+        const fileInput = document.getElementById('file-input');
+        const attachmentPreview = document.getElementById('attachment-preview');
+        const statusBadge = document.getElementById('status');
 
-  <script>
-    const statusEl = document.getElementById("status");
-    const chat = document.getElementById("chat");
-    const previewEl = document.getElementById("attachmentPreview");
-    let currentAttachment = null;
+        let currentAttachment = null;
+        let isFirstMessage = true;
 
-    const NEXA_FILES = ["memory.js", "tools.js", "ai.js", "brain.js"];
+        // Gestionnaire du bouton fichier
+        fileBtn.addEventListener('click', () => fileInput.click());
 
-    function loadScript(name) {
-      return new Promise(function (resolve, reject) {
-        const script = document.createElement("script");
-        script.src = name + "?t=" + Date.now();
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
-    function restoreHistory() {
-      const memoryObj = window.NexaMemory || window.nexaMemory;
-      if (!memoryObj) return;
+            statusBadge.textContent = "Lecture...";
+            const result = await NexaTools.processLocalFile(file);
+            
+            if (result.error) {
+                alert(result.error);
+                statusBadge.textContent = "PRÊT";
+                return;
+            }
 
-      const history = memoryObj.getHistory();
-      for (const item of history) {
-        const div = document.createElement("div");
-        div.className = "message " + (item.role === "user" ? "user" : "nexa");
-        if (item.role === "user") {
-          div.textContent = item.text;
-        } else {
-          div.innerHTML = item.text;
+            currentAttachment = result;
+            attachmentPreview.textContent = `📎 Fichier joint : ${result.name}`;
+            attachmentPreview.style.display = "inline-block";
+            statusBadge.textContent = "FICHIER PRÊT";
+        });
+
+        // Ajustement automatique du textarea
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Envoi du message
+        async function handleSend() {
+            const text = userInput.value.trim();
+            if (!text && !currentAttachment) return;
+
+            if (isFirstMessage) {
+                chatContainer.innerHTML = '';
+                isFirstMessage = false;
+            }
+
+            // Affichage message utilisateur
+            const userBubble = document.createElement('div');
+            userBubble.className = 'message user-message';
+            userBubble.textContent = text + (currentAttachment ? ` [📎 ${currentAttachment.name}]` : '');
+            chatContainer.appendChild(userBubble);
+
+            const sentAttachment = currentAttachment;
+            
+            // Reset input
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            currentAttachment = null;
+            attachmentPreview.style.display = 'none';
+            attachmentPreview.textContent = '';
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Indicateur de réflexion
+            statusBadge.textContent = "RÉFLÉCHIT...";
+            const aiBubble = document.createElement('div');
+            aiBubble.className = 'message ai-message';
+            aiBubble.textContent = "Nexa réfléchit...";
+            chatContainer.appendChild(aiBubble);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                // Appel au Cerveau
+                const response = await NexaBrain.think(text, sentAttachment);
+                aiBubble.innerHTML = formatResponse(response);
+            } catch (err) {
+                aiBubble.textContent = "Une erreur est survenue dans mon Brain.";
+            }
+
+            statusBadge.textContent = "PRÊT";
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-        chat.appendChild(div);
-      }
-    }
 
-    async function boot() {
-      for (const file of NEXA_FILES) {
-        try { await loadScript(file); } catch (e) {}
-      }
-
-      const brainObj = window.NexaBrain || window.nexaBrain;
-      if (brainObj) {
-        statusEl.textContent = "BRAIN v" + brainObj.version + " • ONLINE";
-        statusEl.classList.add("online");
-      } else {
-        statusEl.textContent = "BRAIN • OFFLINE";
-      }
-      restoreHistory();
-    }
-
-    const ready = boot();
-
-    async function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const toolsObj = window.NexaTools || window.nexaTools;
-      if (!toolsObj) {
-        alert("Les outils ne sont pas encore chargés.");
-        return;
-      }
-
-      previewEl.style.display = "block";
-      previewEl.textContent = "Lecture de " + file.name + "...";
-
-      const result = await toolsObj.processLocalFile(file);
-
-      if (result.error) {
-        previewEl.textContent = "❌ Erreur : " + result.error;
-        currentAttachment = null;
-      } else {
-        currentAttachment = result;
-        previewEl.textContent = "📎 " + file.name + " (Prêt)";
-      }
-      event.target.value = ""; 
-    }
-
-    async function sendMessage() {
-      await ready;
-
-      const input = document.getElementById("messageInput");
-      const message = input.value.trim();
-
-      if (!message && !currentAttachment) return;
-
-      const userMessage = document.createElement("div");
-      userMessage.className = "message user";
-      
-      let displayMsg = message;
-      if (currentAttachment) {
-        displayMsg = (message ? message + "\n\n" : "") + "[Fichier joint : " + currentAttachment.name + "]";
-      }
-      userMessage.textContent = displayMsg;
-      chat.appendChild(userMessage);
-
-      input.value = "";
-      const attachmentToSend = currentAttachment;
-      currentAttachment = null;
-      previewEl.style.display = "none";
-
-      const nexaMessage = document.createElement("div");
-      nexaMessage.className = "message nexa thinking";
-      nexaMessage.textContent = "NEXA réfléchit…";
-      chat.appendChild(nexaMessage);
-      nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-
-      let reply;
-      const brainObj = window.NexaBrain || window.nexaBrain;
-      
-      if (brainObj) {
-        try {
-          const thinkFunc = brainObj.think || brainObj.processInput;
-          reply = await thinkFunc.call(brainObj, message, attachmentToSend);
-        } catch (e) {
-          reply = "Une erreur est survenue dans mon Brain. Réessayez.";
+        function formatResponse(text) {
+            if (!text) return "";
+            // Remplacement des sauts de ligne et rendu HTML sécurisé pour les liens/boutons
+            return text.replace(/\n/g, '<br>');
         }
-      } else {
-        reply = "Le Brain n'est pas chargé.";
-      }
 
-      nexaMessage.classList.remove("thinking");
-      nexaMessage.innerHTML = reply;
-      nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-
-    document.getElementById("messageInput").addEventListener("keydown", function(event) {
-      if (event.key === "Enter") sendMessage();
-    });
-  </script>
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    </script>
 </body>
 </html>
