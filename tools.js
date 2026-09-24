@@ -1,15 +1,12 @@
 // ============================================
-// NEXA TOOLS - version 0.7
+// NEXA TOOLS - version 0.8
 // Les capacités de NEXA.
-// Registre, météo, wiki, tâches, calendrier (Blob iOS), fichiers.
+// Registre, météo, wiki, tâches, calendrier, chronomètre, routine.
 // ============================================
 
 const NexaTools = {
-  version: "0.7",
+  version: "0.8",
 
-  // --------------------------------------------
-  // LE REGISTRE : la liste des outils disponibles
-  // --------------------------------------------
   registry: {},
 
   register(name, description, handler) {
@@ -43,9 +40,6 @@ const NexaTools = {
     return Object.keys(this.registry);
   },
 
-  // --------------------------------------------
-  // OUTIL : l'heure et la date
-  // --------------------------------------------
   getTime() {
     const now = new Date();
     return now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -56,9 +50,6 @@ const NexaTools = {
     return now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   },
 
-  // --------------------------------------------
-  // OUTIL : les calculs
-  // --------------------------------------------
   calculate(expression) {
     let expr = expression.replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, ".").trim();
     if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
@@ -71,9 +62,6 @@ const NexaTools = {
     return null;
   },
 
-  // --------------------------------------------
-  // OUTIL : Météo (Open-Meteo)
-  // --------------------------------------------
   weatherCodes: {
     0: "ciel dégagé", 1: "plutôt dégagé", 2: "partiellement nuageux", 3: "ciel couvert",
     45: "brouillard", 48: "brouillard givrant", 51: "bruine légère", 53: "bruine",
@@ -112,8 +100,7 @@ const NexaTools = {
   },
 
   async getWeather(city) {
-    const name = (city || "").trim();
-    if (!name) return "Pour quelle ville voulez-vous la météo ?";
+    const name = (city || "").trim() || "Paris"; // Ville par défaut si non précisée
     try {
       const parts = this.splitPlace(name);
       let place = null;
@@ -135,15 +122,12 @@ const NexaTools = {
       const where = [place.admin1, place.country].filter(Boolean).join(", ");
       const condition = this.weatherCodes[current.weather_code] || "conditions variables";
 
-      return "Météo à " + place.name + " (" + where + ") : " + Math.round(current.temperature_2m) + " °C, " + condition + ". Vent : " + Math.round(current.wind_speed_10m) + " km/h.";
+      return "Météo à " + place.name + " (" + where + ") : " + Math.round(current.temperature_2m) + " °C, " + condition + ".";
     } catch (e) {
       return "Impossible de joindre le service météo.";
     }
   },
 
-  // --------------------------------------------
-  // OUTIL : Wikipédia
-  // --------------------------------------------
   async searchWikipedia(query) {
     const q = (query || "").trim();
     if (!q) return "Que chercher sur Wikipédia ?";
@@ -167,9 +151,6 @@ const NexaTools = {
     }
   },
 
-  // --------------------------------------------
-  // OUTIL : Tâches
-  // --------------------------------------------
   tasksKey: "tasks",
   loadTasks() {
     if (typeof NexaMemory === "undefined") return null;
@@ -218,9 +199,6 @@ const NexaTools = {
     return "Action inconnue.";
   },
 
-  // --------------------------------------------
-  // OUTIL : Générer un événement Calendrier (Blob iOS)
-  // --------------------------------------------
   createCalendarEvent(title, dateStr, timeStr, desc) {
     try {
       const d = new Date(dateStr + "T" + (timeStr || "12:00"));
@@ -245,8 +223,69 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL INTERNE : Lecture de fichiers
+  // NOUVEAU OUTIL : Chronomètre interactif
   // --------------------------------------------
+  createChronometer() {
+    const id = "chrono_" + Date.now();
+    return `
+      <div style="background:rgba(255,255,255,0.05); padding:12px 16px; border-radius:14px; border:1px solid rgba(255,255,255,0.1); margin-top:8px; display:inline-block; text-align:center;">
+        ⏱️ <b>Chronomètre NEXA</b><br>
+        <span id="${id}" style="font-size:1.4rem; font-weight:bold; font-family:monospace; color:#a78bfa;">00:00:00</span><br>
+        <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
+          <button onclick="startChrono('${id}')" style="padding:4px 10px; background:#4ade80; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Start</button>
+          <button onclick="stopChrono('${id}')" style="padding:4px 10px; background:#f87171; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Stop</button>
+          <button onclick="resetChrono('${id}')" style="padding:4px 10px; background:#9ca3af; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Reset</button>
+        </div>
+      </div>
+      <script>
+        if (!window.chronoTimers) window.chronoTimers = {};
+        function startChrono(id) {
+          if (window.chronoTimers[id]) return;
+          let [h, m, s] = document.getElementById(id).textContent.split(':').map(Number);
+          let totalSeconds = h * 3600 + m * 60 + s;
+          window.chronoTimers[id] = setInterval(() => {
+            totalSeconds++;
+            let hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+            let mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+            let ss = String(totalSeconds % 60).padStart(2, '0');
+            const el = document.getElementById(id);
+            if(el) el.textContent = \`\${hh}:\${mm}:\${ss}\`;
+          }, 1000);
+        }
+        function stopChrono(id) {
+          clearInterval(window.chronoTimers[id]);
+          window.chronoTimers[id] = null;
+        }
+        function resetChrono(id) {
+          stopChrono(id);
+          const el = document.getElementById(id);
+          if(el) el.textContent = "00:00:00";
+        }
+      </script>
+    `;
+  },
+
+  // --------------------------------------------
+  // NOUVEAU OUTIL : Routine quotidienne ("Bonjour")
+  // --------------------------------------------
+  async getDailyRoutine() {
+    const dateText = this.getDate();
+    const timeText = this.getTime();
+    const weatherText = await this.getWeather("Paris"); // Ou ville par défaut
+    const tasks = this.loadTasks();
+    const taskCount = tasks ? tasks.filter(t => !t.done).length : 0;
+    
+    let routineSummary = `✨ **Bonjour ! Voici ton point du jour :**\n\n`;
+    routineSummary += `📅 Nous sommes le **${dateText}** (${timeText}).\n`;
+    routineSummary += `🌤️ ${weatherText}\n`;
+    routineSummary += `📝 Tu as **${taskCount} tâche(s)** en attente dans ta liste.\n`;
+    if (taskCount > 0) {
+      routineSummary += `\n*Aperçu :*\n` + this.formatTasks(tasks.slice(0, 3));
+    }
+    routineSummary += `\n\nComment puis-je t'aider à démarrer cette journée ?`;
+    return routineSummary;
+  },
+
   processLocalFile(file) {
     return new Promise(function(resolve) {
       if (!file) return resolve({ error: "Aucun fichier" });
@@ -275,3 +314,5 @@ NexaTools.register("meteo", "Météo (args: city).", (args) => NexaTools.getWeat
 NexaTools.register("wikipedia", "Wiki (args: query).", (args) => NexaTools.searchWikipedia(args.query));
 NexaTools.register("taches", "Tâches (args: action, text, number).", (args) => NexaTools.manageTasks(args.action, args.text, args.number));
 NexaTools.register("calendrier", "Crée un événement (args: title, date (YYYY-MM-DD), time (HH:MM), desc).", (args) => NexaTools.createCalendarEvent(args.title, args.date, args.time, args.desc));
+NexaTools.register("chronometre", "Lance un chronomètre interactif.", () => NexaTools.createChronometer());
+NexaTools.register("routine", "Affiche le point du jour (météo, date, tâches).", async () => await NexaTools.getDailyRoutine());
