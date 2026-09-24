@@ -174,8 +174,12 @@
     const statusEl = document.getElementById("status");
     const chat = document.getElementById("chat");
 
+    // Les fichiers de NEXA, dans l'ordre de chargement :
+    // mémoire, outils, modèle IA, puis cerveau.
     const NEXA_FILES = ["memory.js", "tools.js", "ai.js", "brain.js"];
 
+    // Charge un fichier en demandant toujours la version
+    // la plus récente (le "?t=" évite l'ancienne copie de Safari).
     function loadScript(name) {
       return new Promise(function (resolve, reject) {
         const script = document.createElement("script");
@@ -188,11 +192,11 @@
       });
     }
 
+    // Réaffiche les derniers messages enregistrés en mémoire
     function restoreHistory() {
-      if (typeof NEXAMemory === "undefined") return;
+      if (typeof NexaMemory === "undefined") return;
 
-      const history = NEXAMemory.getHistory ? NEXAMemory.getHistory() : [];
-      if (!history || !Array.isArray(history)) return;
+      const history = NexaMemory.getHistory();
 
       for (const item of history) {
         const div = document.createElement("div");
@@ -202,17 +206,18 @@
       }
     }
 
+    // Démarrage : on charge les fichiers un par un
     async function boot() {
       for (const file of NEXA_FILES) {
         try {
           await loadScript(file);
         } catch (e) {
-          // Le fichier n'a pas pu être chargé
+          // Le fichier n'a pas pu être chargé : on continue
         }
       }
 
-      if (typeof NEXABrain !== "undefined") {
-        statusEl.textContent = "BRAIN " + NEXABrain.version + " • ONLINE";
+      if (typeof NexaBrain !== "undefined") {
+        statusEl.textContent = "BRAIN v" + NexaBrain.version + " • ONLINE";
         statusEl.classList.add("online");
       } else {
         statusEl.textContent = "BRAIN • OFFLINE";
@@ -224,9 +229,12 @@
     const ready = boot();
 
     async function sendMessage() {
+
+      // On attend que NEXA ait fini de démarrer
       await ready;
 
       const input = document.getElementById("messageInput");
+
       const message = input.value.trim();
 
       if (!message) return;
@@ -239,6 +247,7 @@
 
       input.value = "";
 
+      // Message d'attente pendant que NEXA réfléchit
       const nexaMessage = document.createElement("div");
       nexaMessage.className = "message nexa thinking";
       nexaMessage.textContent = "NEXA réfléchit…";
@@ -248,9 +257,9 @@
 
       let reply;
 
-      if (typeof NEXABrain !== "undefined") {
+      if (typeof NexaBrain !== "undefined") {
         try {
-          reply = await NEXABrain.process(message);
+          reply = await NexaBrain.think(message);
         } catch (e) {
           reply = "Une erreur est survenue dans mon Brain. Réessayez.";
         }
