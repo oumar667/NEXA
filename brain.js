@@ -1,12 +1,13 @@
 // ============================================
-// NEXA BRAIN - version 0.8
+// NEXA BRAIN - version 0.9
 // Le cerveau de NEXA
-// Nouveauté v0.8 : Recherche Web automatique 
-// intégrée aux réponses de l'IA (sans mot-clé)
+// Nouveauté v0.9 : Consignes strictes pour forcer
+// l'utilisation des données Web et interdire
+// le message "Je n'ai pas Internet".
 // ============================================
 
 const NexaBrain = {
-  version: "0.8",
+  version: "0.9",
 
   pending: null,
 
@@ -101,32 +102,35 @@ const NexaBrain = {
 
     const hasMemory = typeof NexaMemory !== "undefined";
 
-    // Recherche automatique sur le Web pour enrichir la réponse de l'IA
+    // Recherche Web automatique
     let webContext = "";
     const searchRes = await this.useTool("recherche", { query: text });
     if (searchRes.ok && searchRes.result) {
-      webContext = "\n- Informations récentes trouvées sur le Web :\n" + searchRes.result;
+      webContext = "\n- Informations Web en temps réel :\n" + searchRes.result;
     }
 
+    // Ordres stricts donnés au modèle IA
     let system =
-      "Tu es NEXA, l'assistant personnel de l'utilisateur. " +
-      "Tu réponds toujours en français, de façon claire, simple et courte, " +
-      "car l'écran est celui d'un iPhone. " +
-      "Utilise les informations du Web fournies si elles permettent de répondre à la question.";
+      "Tu es NEXA, un assistant IA connecté et ultra-performant. " +
+      "CONSIGNES IMPÉRATIVES :\n" +
+      "1. Réponds en français, directement et clairement pour un écran iPhone.\n" +
+      "2. Ne dis JAMAIS que tu n'as pas accès à Internet ou que tu manques d'informations d'actualité.\n" +
+      "3. Utilise toujours les données du Web fournies ci-dessous pour répondre aux questions sur les clubs, l'actualité ou les faits récents.\n" +
+      "4. Fais confiance en priorité aux informations du Web qui te sont données.";
 
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
     if (name) {
-      system += " L'utilisateur s'appelle " + name + ".";
+      system += "\n- L'utilisateur s'appelle " + name + ".";
     }
 
     const ville = hasMemory ? NexaMemory.recall("ville") : null;
     if (ville) {
-      system += " Sa ville est " + ville + ".";
+      system += "\n- Sa ville est " + ville + ".";
     }
 
     const notes = this.getNotes();
     if (notes.length > 0) {
-      system += " Ce que l'utilisateur t'a demandé de retenir :";
+      system += "\n- Notes enregistrées :";
       for (const n of notes) {
         system += " - " + n.text + ".";
       }
@@ -323,7 +327,7 @@ const NexaBrain = {
 
       if (!city) {
         this.pending = "meteo";
-        return "Pour quelle ville ? Vous pouvez aussi me dire « J'habite à ... » pour que je m'en souvienne.";
+        return "Pour quelle ville ? Vous pouvez aussi me dire « J me nomme ... » ou « J'habite à ... » pour que je m'en souvienne.";
       }
 
       return await this.weatherReply(city);
@@ -384,11 +388,11 @@ const NexaBrain = {
       if (known) {
         return "Bonjour " + known + ". Ravi de vous retrouver.";
       }
-      return "Bonjour. Je suis NEXA. Mon cerveau est en construction, mais je vous écoute.";
+      return "Bonjour. Je suis NEXA, votre assistant intelligent.";
     }
 
     if (lower.includes("qui es-tu") || lower.includes("qui es tu")) {
-      return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
+      return "Je suis NEXA, votre système intelligent personnel.";
     }
 
     return null;
