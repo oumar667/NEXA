@@ -89,6 +89,11 @@
       overflow-wrap: anywhere;
     }
 
+    .message a {
+      color: #4ade80;
+      text-decoration: underline;
+    }
+
     .user {
       background: #1d2330;
       margin-left: auto;
@@ -110,7 +115,14 @@
       margin-top: 15px;
     }
 
-    input {
+    #attachBtn {
+      background: #292e39;
+      color: white;
+      font-size: 24px;
+      padding: 0 15px;
+    }
+
+    input[type="text"] {
       flex: 1;
       padding: 15px;
       border-radius: 14px;
@@ -149,20 +161,16 @@
 
       <div class="welcome">
         <h1>Bonjour.</h1>
-        <p>
-          Je suis NEXA. Votre système intelligent personnel.
-        </p>
+        <p>Je suis NEXA. Votre système intelligent personnel.</p>
       </div>
 
       <div id="chat"></div>
 
-      <div class="input-area">
-        <input
-          id="messageInput"
-          type="text"
-          placeholder="Écrivez à NEXA..."
-        >
+      <input type="file" id="fileInput" style="display: none;" accept="image/*, .txt, .pdf" onchange="handleFileSelect(event)">
 
+      <div class="input-area">
+        <button id="attachBtn" onclick="document.getElementById('fileInput').click()">+</button>
+        <input id="messageInput" type="text" placeholder="Écrivez à NEXA...">
         <button onclick="sendMessage()">Envoyer</button>
       </div>
 
@@ -174,12 +182,8 @@
     const statusEl = document.getElementById("status");
     const chat = document.getElementById("chat");
 
-    // Les fichiers de NEXA, dans l'ordre de chargement :
-    // mémoire, outils, modèle IA, puis cerveau.
     const NEXA_FILES = ["memory.js", "tools.js", "ai.js", "brain.js"];
 
-    // Charge un fichier en demandant toujours la version
-    // la plus récente (le "?t=" évite l'ancienne copie de Safari).
     function loadScript(name) {
       return new Promise(function (resolve, reject) {
         const script = document.createElement("script");
@@ -192,7 +196,6 @@
       });
     }
 
-    // Réaffiche les derniers messages enregistrés en mémoire
     function restoreHistory() {
       if (typeof NexaMemory === "undefined") return;
 
@@ -201,19 +204,22 @@
       for (const item of history) {
         const div = document.createElement("div");
         div.className = "message " + (item.role === "user" ? "user" : "nexa");
-        div.textContent = item.text;
+        
+        if (item.role === "user") {
+          div.textContent = item.text;
+        } else {
+          div.innerHTML = item.text; // Permet à NEXA d'afficher des liens
+        }
+        
         chat.appendChild(div);
       }
     }
 
-    // Démarrage : on charge les fichiers un par un
     async function boot() {
       for (const file of NEXA_FILES) {
         try {
           await loadScript(file);
-        } catch (e) {
-          // Le fichier n'a pas pu être chargé : on continue
-        }
+        } catch (e) {}
       }
 
       if (typeof NexaBrain !== "undefined") {
@@ -228,13 +234,17 @@
 
     const ready = boot();
 
-    async function sendMessage() {
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      alert("Fichier détecté : " + file.name + "\n(Le traitement arrive à la prochaine étape !)");
+      event.target.value = ""; // Réinitialise l'input
+    }
 
-      // On attend que NEXA ait fini de démarrer
+    async function sendMessage() {
       await ready;
 
       const input = document.getElementById("messageInput");
-
       const message = input.value.trim();
 
       if (!message) return;
@@ -242,21 +252,17 @@
       const userMessage = document.createElement("div");
       userMessage.className = "message user";
       userMessage.textContent = message;
-
       chat.appendChild(userMessage);
 
       input.value = "";
 
-      // Message d'attente pendant que NEXA réfléchit
       const nexaMessage = document.createElement("div");
       nexaMessage.className = "message nexa thinking";
       nexaMessage.textContent = "NEXA réfléchit…";
-
       chat.appendChild(nexaMessage);
       nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
 
       let reply;
-
       if (typeof NexaBrain !== "undefined") {
         try {
           reply = await NexaBrain.think(message);
@@ -268,17 +274,15 @@
       }
 
       nexaMessage.classList.remove("thinking");
-      nexaMessage.textContent = reply;
+      nexaMessage.innerHTML = reply; // Permet à NEXA d'afficher des liens
       nexaMessage.scrollIntoView({ behavior: "smooth", block: "end" });
     }
 
-    document
-      .getElementById("messageInput")
-      .addEventListener("keydown", function(event) {
-        if (event.key === "Enter") {
-          sendMessage();
-        }
-      });
+    document.getElementById("messageInput").addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    });
   </script>
 
 </body>
