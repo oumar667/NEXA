@@ -1,14 +1,14 @@
 // ============================================
-// NEXA BRAIN - version 0.7
+// NEXA BRAIN - version 0.8
 // Le cerveau de NEXA : il reçoit un message,
 // utilise la Memory, les Tools (via le registre)
 // et le modèle IA, et décide quoi répondre.
-// Nouveautés : ville mieux comprise, Wikipédia,
-// consignes plus strictes pour le modèle IA.
+// Nouveautés : aide, gestion de la clé IA,
+// effacement de la conversation.
 // ============================================
 
 const NexaBrain = {
-  version: "0.7",
+  version: "0.8",
 
   // Sert à se souvenir qu'on attend une réponse
   // (ex : "Pour quelle ville ?")
@@ -67,6 +67,23 @@ const NexaBrain = {
       }
     }
     return notes;
+  },
+
+  // Texte de l'aide : la liste des commandes
+  helpText() {
+    return (
+      "Voici ce que je sais faire :\n" +
+      "- Prénom : « Je m'appelle ... »\n" +
+      "- Ville : « J'habite ... »\n" +
+      "- Notes : « Retiens que ... », « Que retiens-tu ? », « Oublie mes notes »\n" +
+      "- Météo : « Météo à Paris » ou « Quelle est la météo ? »\n" +
+      "- Recherche : « Cherche sur Wikipédia ... »\n" +
+      "- Calcul : « Calcule 12 * 5 + 3 »\n" +
+      "- Heure et date : « Quelle heure est-il ? »\n" +
+      "- Clé IA : « Change ma clé » ou « Supprime ma clé »\n" +
+      "- Conversation : « Efface la conversation »\n" +
+      "- Tout le reste : je le confie au modèle IA."
+    );
   },
 
   // "Saint-Louis France" devient "Saint-Louis, France"
@@ -211,6 +228,7 @@ const NexaBrain = {
       "retiennes quelque chose, dis-lui d'écrire « Retiens que ... ». " +
       "Pour la météo, dis-lui d'écrire « Météo à Paris » (avec sa ville). " +
       "Pour une recherche, dis-lui d'écrire « Cherche sur Wikipédia ... ». " +
+      "S'il demande ce que tu sais faire, dis-lui d'écrire « Aide ». " +
       "Tu n'utilises jamais de Markdown : pas d'astérisques, pas de titres.";
 
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
@@ -286,6 +304,61 @@ const NexaBrain = {
           return await this.wikiReply(topic);
         }
       }
+    }
+
+    // --- Aide : liste des commandes ---
+    if (
+      /^(aide|help|menu|commandes)\s*[?!.]*$/i.test(clean) ||
+      lower.includes("que sais-tu faire") ||
+      lower.includes("que sais tu faire") ||
+      lower.includes("que peux-tu faire") ||
+      lower.includes("que peux tu faire") ||
+      lower.includes("quelles sont tes commandes") ||
+      lower.includes("qu'est-ce que tu sais faire")
+    ) {
+      return this.helpText();
+    }
+
+    // --- Gestion de la clé du modèle IA ---
+    const mentionsKey = /(^|[^a-zà-ÿ])cl[ée]([^a-zà-ÿ]|$)/i.test(clean);
+    if (mentionsKey) {
+      if (typeof NexaAI === "undefined") {
+        return "Mon module IA n'est pas connecté.";
+      }
+
+      // Supprimer la clé
+      if (/supprim|efface|oublie|retire|enl[eè]ve/i.test(lower)) {
+        NexaAI.clearKey();
+        return "C'est fait. J'ai supprimé la clé enregistrée sur cet iPhone. Pour en remettre une, écrivez « Change ma clé ».";
+      }
+
+      // Changer la clé
+      if (/chang|modifi|nouvelle|remplac|ajoute|saisi|entre|mets/i.test(lower)) {
+        const oldKey = NexaAI.getKey();
+        NexaAI.clearKey();
+        const newKey = NexaAI.ensureKey();
+        if (newKey) {
+          return "C'est fait. Votre nouvelle clé est enregistrée sur cet iPhone.";
+        }
+        if (oldKey) {
+          NexaAI.setKey(oldKey);
+          return "Aucune nouvelle clé saisie : je garde l'ancienne.";
+        }
+        return "Aucune clé saisie. Écrivez « Change ma clé » quand vous voulez en enregistrer une.";
+      }
+    }
+
+    // --- Effacer la conversation (garde prénom, ville, notes) ---
+    if (
+      /(efface|supprime|vide|nettoie|oublie|r[ée]initialise)\s+(?:toute\s+|tout\s+)?(?:la\s+|notre\s+|cette\s+|l')\s*(?:conversation|historique)/i.test(lower)
+    ) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const data = NexaMemory.load();
+      data.history = [];
+      NexaMemory.save(data);
+      return "C'est fait. J'ai effacé l'historique de la conversation. Votre prénom, votre ville et vos notes sont conservés. Rechargez la page pour vider l'écran.";
     }
 
     // --- Retenir la ville ---
