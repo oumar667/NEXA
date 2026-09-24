@@ -1,15 +1,12 @@
 // ============================================
-// NEXA TOOLS - version 0.5
+// NEXA TOOLS - version 0.6
 // Les capacités de NEXA.
-// Registre, météo, wiki, tâches, calendrier, fichiers.
+// Registre, météo, wiki, tâches, calendrier (Fix iOS), fichiers.
 // ============================================
 
 const NexaTools = {
-  version: "0.5",
+  version: "0.6",
 
-  // --------------------------------------------
-  // LE REGISTRE : la liste des outils disponibles
-  // --------------------------------------------
   registry: {},
 
   register(name, description, handler) {
@@ -43,9 +40,6 @@ const NexaTools = {
     return Object.keys(this.registry);
   },
 
-  // --------------------------------------------
-  // OUTIL : l'heure et la date
-  // --------------------------------------------
   getTime() {
     const now = new Date();
     return now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -56,9 +50,6 @@ const NexaTools = {
     return now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   },
 
-  // --------------------------------------------
-  // OUTIL : les calculs
-  // --------------------------------------------
   calculate(expression) {
     let expr = expression.replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, ".").trim();
     if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
@@ -71,9 +62,6 @@ const NexaTools = {
     return null;
   },
 
-  // --------------------------------------------
-  // OUTIL : Météo (Open-Meteo)
-  // --------------------------------------------
   weatherCodes: {
     0: "ciel dégagé", 1: "plutôt dégagé", 2: "partiellement nuageux", 3: "ciel couvert",
     45: "brouillard", 48: "brouillard givrant", 51: "bruine légère", 53: "bruine",
@@ -141,9 +129,6 @@ const NexaTools = {
     }
   },
 
-  // --------------------------------------------
-  // OUTIL : Wikipédia
-  // --------------------------------------------
   async searchWikipedia(query) {
     const q = (query || "").trim();
     if (!q) return "Que chercher sur Wikipédia ?";
@@ -167,9 +152,6 @@ const NexaTools = {
     }
   },
 
-  // --------------------------------------------
-  // OUTIL : Tâches
-  // --------------------------------------------
   tasksKey: "tasks",
   loadTasks() {
     if (typeof NexaMemory === "undefined") return null;
@@ -218,16 +200,12 @@ const NexaTools = {
     return "Action inconnue.";
   },
 
-  // --------------------------------------------
-  // NOUVEAU OUTIL : Générer un événement Calendrier
-  // --------------------------------------------
   createCalendarEvent(title, dateStr, timeStr, desc) {
     try {
-      // Construction pour gérer les fuseaux horaires d'iOS (format ICS)
       const d = new Date(dateStr + "T" + (timeStr || "12:00"));
       const dtstart = d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       
-      d.setHours(d.getHours() + 1); // Durée de 1h par défaut
+      d.setHours(d.getHours() + 1);
       const dtend = d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 
       const ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//NEXA//FR\nBEGIN:VEVENT\n" +
@@ -236,16 +214,16 @@ const NexaTools = {
         "DTSTART:" + dtstart + "\nDTEND:" + dtend + "\n" +
         "END:VEVENT\nEND:VCALENDAR";
 
-      const uri = "data:text/calendar;charset=utf8," + encodeURIComponent(ics);
-      return `<a href="${uri}" download="event.ics" style="display:inline-block; margin-top:8px; padding:10px 14px; background:#292e39; color:#4ade80; border-radius:10px; text-decoration:none;">📅 Ajouter « ${title} » au calendrier</a>`;
+      // Encodage en Base64 pour forcer la reconnaissance par iOS Safari
+      const base64Ics = btoa(unescape(encodeURIComponent(ics)));
+      const uri = "data:text/calendar;base64," + base64Ics;
+      
+      return `<a href="${uri}" target="_blank" style="display:inline-block; margin-top:8px; padding:10px 14px; background:#292e39; color:#4ade80; border-radius:10px; text-decoration:none;">📅 Ajouter « ${title} » au calendrier</a>`;
     } catch(e) {
       return "Erreur lors de la création de l'événement.";
     }
   },
 
-  // --------------------------------------------
-  // NOUVEAU OUTIL INTERNE : Lecture de fichiers (Interface -> Brain)
-  // --------------------------------------------
   processLocalFile(file) {
     return new Promise(function(resolve) {
       if (!file) return resolve({ error: "Aucun fichier" });
@@ -264,9 +242,6 @@ const NexaTools = {
   }
 };
 
-// --------------------------------------------
-// Déclarations dans le registre
-// --------------------------------------------
 NexaTools.register("heure", "Donne l'heure.", () => NexaTools.getTime());
 NexaTools.register("date", "Donne la date.", () => NexaTools.getDate());
 NexaTools.register("calcul", "Calcule (args: expression).", (args) => NexaTools.calculate(args.expression));
