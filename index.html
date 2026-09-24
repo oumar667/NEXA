@@ -126,30 +126,6 @@
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    async function getBrainResponse(text) {
-      if (typeof NexaBrain === "undefined") {
-        return "Erreur : NexaBrain n'est pas chargé.";
-      }
-      if (typeof NexaBrain === "function") {
-        return await NexaBrain(text);
-      }
-      
-      const methods = ["think", "reply", "process", "processInput", "processMessage", "ask", "handle", "getResponse", "answer", "send"];
-      for (const m of methods) {
-        if (typeof NexaBrain[m] === "function") {
-          return await NexaBrain[m](text);
-        }
-      }
-
-      for (const key in NexaBrain) {
-        if (typeof NexaBrain[key] === "function") {
-          return await NexaBrain[key](text);
-        }
-      }
-
-      return "Brain connecté mais aucune fonction de traitement trouvée.";
-    }
-
     async function handleSend() {
       const text = userInput.value.trim();
       if (!text) return;
@@ -158,7 +134,12 @@
       userInput.value = "";
 
       try {
-        const reply = await getBrainResponse(text);
+        let reply = "";
+        if (typeof NexaBrain !== "undefined" && typeof NexaBrain.think === "function") {
+          reply = await NexaBrain.think(text);
+        } else {
+          reply = "Erreur : NexaBrain n'est pas chargé correctement.";
+        }
         addMessage(reply, "nexa");
       } catch (err) {
         console.error(err);
