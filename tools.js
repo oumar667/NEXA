@@ -1,10 +1,11 @@
 // ============================================
-// NEXA TOOLS - version 0.4
+// NEXA TOOLS - version 0.5
 // Registre des outils disponibles pour le Brain
+// Nouveauté : recherche web instantanée
 // ============================================
 
 const NexaTools = {
-  version: "0.4",
+  version: "0.5",
 
   async run(name, args = {}) {
     switch (name) {
@@ -16,6 +17,8 @@ const NexaTools = {
         return { ok: true, result: this.calculate(args.expression) };
       case "meteo":
         return await this.getWeather(args.city);
+      case "recherche":
+        return await this.webSearch(args.query);
       default:
         return { ok: false, error: "Outil inconnu : " + name };
     }
@@ -74,12 +77,47 @@ const NexaTools = {
       const wind = current.windspeedKmph;
 
       const locationStr = country ? `${exactCity} (${country})` : exactCity;
-      const result = `Météo à ${locationStr} : ${temp}°C (${desc.toLowerCase()}), ressenti ${feelsLike}°C. Vent : ${wind} km/h, humidité : ${humidity}%.`;
-
-      return { ok: true, result: result };
+      return {
+        ok: true,
+        result: `Météo à ${locationStr} : ${temp}°C (${desc.toLowerCase()}), ressenti ${feelsLike}°C. Vent : ${wind} km/h, humidité : ${humidity}%.`
+      };
     } catch (err) {
       console.error(err);
       return { ok: false, error: "Erreur lors de la récupération de la météo." };
+    }
+  },
+
+  // Outil de recherche Web
+  async webSearch(query) {
+    if (!query) {
+      return { ok: false, error: "Veuillez préciser un sujet de recherche." };
+    }
+
+    try {
+      const cleanQuery = encodeURIComponent(query.trim());
+      const url = `https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${cleanQuery}&utf8=&format=json&origin=*`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        return { ok: false, error: "Erreur lors de la recherche en ligne." };
+      }
+
+      const data = await response.json();
+      const results = data.query?.search;
+
+      if (!results || results.length === 0) {
+        return { ok: false, error: `Aucun résultat trouvé pour « ${query} ».` };
+      }
+
+      const summary = results.slice(0, 2).map(item => {
+        const snippet = item.snippet.replace(/<[^>]*>/g, "");
+        return `• ${item.title} : ${snippet}...`;
+      }).join("\n");
+
+      return { ok: true, result: summary };
+    } catch (err) {
+      console.error(err);
+      return { ok: false, error: "Erreur réseau pendant la recherche." };
     }
   }
 };
