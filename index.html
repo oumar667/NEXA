@@ -35,7 +35,6 @@
             background-image: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
         }
 
-        /* En-tête épuré et flottant */
         header {
             display: flex;
             justify-content: space-between;
@@ -71,7 +70,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Zone de discussion principale */
         #chat-container {
             flex: 1;
             overflow-y: auto;
@@ -118,7 +116,6 @@
             line-height: 1.5;
         }
 
-        /* Bulles de messages nouvelle génération */
         .message {
             max-width: 88%;
             padding: 16px 20px;
@@ -157,7 +154,6 @@
             max-width: 100%;
         }
 
-        /* Barre de saisie style Capsule Flottante */
         .input-area {
             padding: 16px 20px 24px 20px;
             background: linear-gradient(to top, var(--bg-color) 80%, transparent);
@@ -283,11 +279,11 @@
         </div>
     </div>
 
-    <!-- Scripts de l'application -->
-    <script src="memory.js"></script>
-    <script src="tools.js"></script>
-    <script src="ai.js"></script>
-    <script src="brain.js"></script>
+    <!-- Scripts de l'application avec versioning anti-cache -->
+    <script src="memory.js?v=0.8"></script>
+    <script src="tools.js?v=0.8"></script>
+    <script src="ai.js?v=0.8"></script>
+    <script src="brain.js?v=0.8"></script>
 
     <script>
         const chatContainer = document.getElementById('chat-container');
