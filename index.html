@@ -33,6 +33,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
     }
 
     .logo {
@@ -44,6 +45,7 @@
     .status {
       font-size: 12px;
       color: #888;
+      text-align: right;
     }
 
     .status.online {
@@ -84,6 +86,7 @@
       line-height: 1.5;
       max-width: 90%;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .user {
@@ -139,7 +142,7 @@
 
     <header>
       <div class="logo">NEXA</div>
-      <div class="status" id="status">BRAIN • OFFLINE</div>
+      <div class="status" id="status">BRAIN • CHARGEMENT…</div>
     </header>
 
     <main>
@@ -167,26 +170,26 @@
 
   </div>
 
-  <!-- La mémoire de NEXA -->
-  <script src="memory.js"></script>
-
-  <!-- Les outils de NEXA -->
-  <script src="tools.js"></script>
-
-  <!-- Le modèle IA de NEXA -->
-  <script src="ai.js"></script>
-
-  <!-- Le cerveau de NEXA -->
-  <script src="brain.js"></script>
-
   <script>
     const statusEl = document.getElementById("status");
     const chat = document.getElementById("chat");
 
-    // Si le Brain est bien chargé, on passe le statut en ONLINE
-    if (typeof NexaBrain !== "undefined") {
-      statusEl.textContent = "BRAIN • ONLINE";
-      statusEl.classList.add("online");
+    // Les fichiers de NEXA, dans l'ordre de chargement :
+    // mémoire, outils, modèle IA, puis cerveau.
+    const NEXA_FILES = ["memory.js", "tools.js", "ai.js", "brain.js"];
+
+    // Charge un fichier en demandant toujours la version
+    // la plus récente (le "?t=" évite l'ancienne copie de Safari).
+    function loadScript(name) {
+      return new Promise(function (resolve, reject) {
+        const script = document.createElement("script");
+        script.src = name + "?t=" + Date.now();
+        script.onload = resolve;
+        script.onerror = function () {
+          reject(name);
+        };
+        document.head.appendChild(script);
+      });
     }
 
     // Réaffiche les derniers messages enregistrés en mémoire
@@ -203,9 +206,32 @@
       }
     }
 
-    restoreHistory();
+    // Démarrage : on charge les fichiers un par un
+    async function boot() {
+      for (const file of NEXA_FILES) {
+        try {
+          await loadScript(file);
+        } catch (e) {
+          // Le fichier n'a pas pu être chargé : on continue
+        }
+      }
+
+      if (typeof NexaBrain !== "undefined") {
+        statusEl.textContent = "BRAIN v" + NexaBrain.version + " • ONLINE";
+        statusEl.classList.add("online");
+      } else {
+        statusEl.textContent = "BRAIN • OFFLINE";
+      }
+
+      restoreHistory();
+    }
+
+    const ready = boot();
 
     async function sendMessage() {
+
+      // On attend que NEXA ait fini de démarrer
+      await ready;
 
       const input = document.getElementById("messageInput");
 
