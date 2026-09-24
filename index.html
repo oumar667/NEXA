@@ -106,11 +106,60 @@
     <button id="send-btn">Envoyer</button>
   </div>
 
-  <!-- Charger les modules dans l'ordre requis -->
+  <!-- Charger les modules JavaScript -->
   <script src="memory.js"></script>
   <script src="tools.js"></script>
   <script src="ai.js"></script>
   <script src="brain.js"></script>
+
+  <!-- Script de gestion de l'interface du tchat -->
+  <script>
+    const chatContainer = document.getElementById("chat-container");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    function addMessage(text, sender) {
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("message", sender);
+      msgDiv.textContent = text;
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    async function handleSend() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      userInput.value = "";
+
+      try {
+        let reply = "";
+        if (typeof NexaBrain !== "undefined") {
+          if (typeof NexaBrain.process === "function") {
+            reply = await NexaBrain.process(text);
+          } else if (typeof NexaBrain.processInput === "function") {
+            reply = await NexaBrain.processInput(text);
+          } else if (typeof NexaBrain.ask === "function") {
+            reply = await NexaBrain.ask(text);
+          } else {
+            reply = "Brain connecté mais aucune fonction de traitement trouvée.";
+          }
+        } else {
+          reply = "Erreur : NexaBrain n'est pas chargé.";
+        }
+        addMessage(reply, "nexa");
+      } catch (err) {
+        console.error(err);
+        addMessage("Une erreur s'est produite lors du traitement.", "nexa");
+      }
+    }
+
+    sendBtn.addEventListener("click", handleSend);
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") handleSend();
+    });
+  </script>
 
 </body>
 </html>
