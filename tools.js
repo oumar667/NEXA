@@ -1,19 +1,17 @@
 // ============================================
-// NEXA TOOLS - version 0.4
+// NEXA TOOLS - version 0.5
 // Les capacités de NEXA.
-// Registre d'outils + météo (avec choix du pays)
-// + recherche Wikipédia + liste de tâches.
+// Registre, météo, wiki, tâches, calendrier, fichiers.
 // ============================================
 
 const NexaTools = {
-  version: "0.4",
+  version: "0.5",
 
   // --------------------------------------------
   // LE REGISTRE : la liste des outils disponibles
   // --------------------------------------------
   registry: {},
 
-  // Déclare un outil : nom, description, fonction
   register(name, description, handler) {
     this.registry[name] = {
       name: name,
@@ -22,8 +20,6 @@ const NexaTools = {
     };
   },
 
-  // Lance un outil par son nom.
-  // Renvoie { ok: true, result: ... } ou { ok: false, error: ... }
   async run(name, args) {
     const tool = this.registry[name];
     if (!tool) {
@@ -37,466 +33,244 @@ const NexaTools = {
     }
   },
 
-  // Décrit les outils (utile plus tard pour le modèle IA)
   describe() {
     return Object.values(this.registry).map(function (t) {
       return { name: t.name, description: t.description };
     });
   },
 
-  // Liste des noms d'outils
   list() {
     return Object.keys(this.registry);
   },
 
   // --------------------------------------------
-  // OUTIL : l'heure
+  // OUTIL : l'heure et la date
   // --------------------------------------------
   getTime() {
     const now = new Date();
-    return now.toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   },
 
-  // --------------------------------------------
-  // OUTIL : la date
-  // --------------------------------------------
   getDate() {
     const now = new Date();
-    return now.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric"
-    });
+    return now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   },
 
   // --------------------------------------------
-  // OUTIL : les calculs (ex : "12 * 5 + 3")
-  // Renvoie le résultat, ou null si invalide
+  // OUTIL : les calculs
   // --------------------------------------------
   calculate(expression) {
-    // On accepte les symboles × et ÷, et la virgule française
-    let expr = expression
-      .replace(/×/g, "*")
-      .replace(/÷/g, "/")
-      .replace(/,/g, ".")
-      .trim();
-
-    // Sécurité : on n'autorise que des chiffres et des opérateurs
-    if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
-      return null;
-    }
-
+    let expr = expression.replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, ".").trim();
+    if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
     try {
       const result = Function('"use strict"; return (' + expr + ");")();
       if (typeof result === "number" && isFinite(result)) {
-        // On arrondit pour éviter 0.1 + 0.2 = 0.30000000000000004
         return Math.round(result * 1000000) / 1000000;
       }
-    } catch (e) {
-      // Calcul invalide
-    }
+    } catch (e) {}
     return null;
   },
 
   // --------------------------------------------
-  // OUTIL : la météo (Open-Meteo, gratuit, sans clé)
-  // Renvoie une phrase prête à afficher
+  // OUTIL : Météo (Open-Meteo)
   // --------------------------------------------
   weatherCodes: {
-    0: "ciel dégagé",
-    1: "plutôt dégagé",
-    2: "partiellement nuageux",
-    3: "ciel couvert",
-    45: "brouillard",
-    48: "brouillard givrant",
-    51: "bruine légère",
-    53: "bruine",
-    55: "bruine forte",
-    56: "bruine verglaçante",
-    57: "bruine verglaçante forte",
-    61: "pluie faible",
-    63: "pluie modérée",
-    65: "pluie forte",
-    66: "pluie verglaçante",
-    67: "pluie verglaçante forte",
-    71: "neige faible",
-    73: "neige modérée",
-    75: "neige forte",
-    77: "grains de neige",
-    80: "averses faibles",
-    81: "averses",
-    82: "averses violentes",
-    85: "averses de neige",
-    86: "fortes averses de neige",
-    95: "orage",
-    96: "orage avec grêle",
-    99: "orage violent avec grêle"
+    0: "ciel dégagé", 1: "plutôt dégagé", 2: "partiellement nuageux", 3: "ciel couvert",
+    45: "brouillard", 48: "brouillard givrant", 51: "bruine légère", 53: "bruine",
+    61: "pluie faible", 63: "pluie modérée", 65: "pluie forte", 71: "neige faible",
+    73: "neige modérée", 95: "orage"
   },
 
-  // Enlève accents, majuscules, tirets et apostrophes
-  // pour pouvoir comparer deux textes
   normalize(str) {
-    return (str || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[-'’]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[-'’]/g, " ").replace(/\s+/g, " ").trim();
   },
 
-  // Sépare "Saint Louis en France" en
-  // { city: "Saint Louis", hint: "France" }
   splitPlace(input) {
     const text = (input || "").trim();
-
     if (text.includes(",")) {
       const parts = text.split(",");
-      return {
-        city: parts[0].trim(),
-        hint: parts.slice(1).join(" ").trim()
-      };
+      return { city: parts[0].trim(), hint: parts.slice(1).join(" ").trim() };
     }
-
-    const match = text.match(
-      /^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i
-    );
-    if (match) {
-      return { city: match[1].trim(), hint: match[2].trim() };
-    }
-
+    const match = text.match(/^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i);
+    if (match) return { city: match[1].trim(), hint: match[2].trim() };
     return { city: text, hint: "" };
   },
 
-  // Vérifie si un résultat correspond au pays ou à la région demandés
   placeMatchesHint(place, hint) {
     const h = this.normalize(hint);
     if (!h) return true;
-
-    // Code pays à 2 lettres (ex : "fr")
-    if (h.length === 2 && this.normalize(place.country_code) === h) {
-      return true;
-    }
+    if (h.length === 2 && this.normalize(place.country_code) === h) return true;
     if (h.length < 3) return false;
-
-    const fields = [
-      place.country,
-      place.admin1,
-      place.admin2,
-      place.admin3,
-      place.admin4
-    ]
-      .filter(Boolean)
-      .map(this.normalize.bind(this));
-
-    return fields.some(function (f) {
-      return f === h || f.includes(h);
-    });
+    const fields = [place.country, place.admin1, place.admin2].filter(Boolean).map(this.normalize.bind(this));
+    return fields.some(function (f) { return f === h || f.includes(h); });
   },
 
-  // Cherche des lieux par nom (Open-Meteo)
   async findPlaces(name, count) {
-    const url =
-      "https://geocoding-api.open-meteo.com/v1/search?name=" +
-      encodeURIComponent(name) +
-      "&count=" + count + "&language=fr&format=json";
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("geocoding");
-    }
+    const response = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(name) + "&count=" + count + "&language=fr&format=json");
     const data = await response.json();
     return data.results || [];
   },
 
   async getWeather(city) {
     const name = (city || "").trim();
-    if (!name) {
-      return "Pour quelle ville voulez-vous la météo ?";
-    }
-
+    if (!name) return "Pour quelle ville voulez-vous la météo ?";
     try {
-      // 1) On trouve la bonne ville (avec le pays si on le connaît)
       const parts = this.splitPlace(name);
       let place = null;
-
       if (parts.hint) {
         const results = await this.findPlaces(parts.city, 50);
         const self = this;
-        place = results.find(function (r) {
-          return self.placeMatchesHint(r, parts.hint);
-        }) || null;
+        place = results.find(function (r) { return self.placeMatchesHint(r, parts.hint); }) || null;
       }
-
       if (!place) {
-        // Soit pas de pays indiqué, soit le nom entier est celui d'une ville
-        // (ex : "Bourg en Bresse")
         const results = await this.findPlaces(name, 10);
-        if (parts.hint) {
-          const hintNorm = this.normalize(parts.hint);
-          const self = this;
-          place = results.find(function (r) {
-            return self.normalize(r.name).includes(hintNorm);
-          }) || null;
-        } else {
-          place = results[0] || null;
-        }
+        place = results[0] || null;
       }
+      if (!place) return "Je n'ai pas trouvé la ville « " + name + " ».";
 
-      if (!place) {
-        if (parts.hint) {
-          return "Je n'ai pas trouvé « " + parts.city + " » (" + parts.hint + ").";
-        }
-        return "Je n'ai pas trouvé la ville « " + name + " ».";
-      }
-
-      // 2) On demande la météo à ces coordonnées
-      const weatherUrl =
-        "https://api.open-meteo.com/v1/forecast" +
-        "?latitude=" + place.latitude +
-        "&longitude=" + place.longitude +
-        "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
-        "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-        "&timezone=auto&forecast_days=1";
-
-      const weatherResponse = await fetch(weatherUrl);
-      if (!weatherResponse.ok) {
-        return "Je n'arrive pas à joindre le service météo pour le moment.";
-      }
+      const weatherResponse = await fetch("https://api.open-meteo.com/v1/forecast?latitude=" + place.latitude + "&longitude=" + place.longitude + "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=auto");
       const w = await weatherResponse.json();
-
       const current = w.current;
-      const daily = w.daily;
-
-      if (!current) {
-        return "Le service météo n'a pas renvoyé de données.";
-      }
-
-      // Le lieu, avec région et pays pour éviter toute confusion
+      
       const where = [place.admin1, place.country].filter(Boolean).join(", ");
-      const place_name = place.name + (where ? " (" + where + ")" : "");
       const condition = this.weatherCodes[current.weather_code] || "conditions variables";
 
-      let text =
-        "Météo à " + place_name + " : " +
-        Math.round(current.temperature_2m) + " °C" +
-        " (ressenti " + Math.round(current.apparent_temperature) + " °C), " +
-        condition + ". Vent : " + Math.round(current.wind_speed_10m) + " km/h.";
-
-      if (daily && daily.temperature_2m_min && daily.temperature_2m_max) {
-        text +=
-          " Aujourd'hui : min " + Math.round(daily.temperature_2m_min[0]) +
-          " °C, max " + Math.round(daily.temperature_2m_max[0]) + " °C";
-        if (
-          daily.precipitation_probability_max &&
-          daily.precipitation_probability_max[0] !== null &&
-          daily.precipitation_probability_max[0] !== undefined
-        ) {
-          text += ", risque de pluie " + daily.precipitation_probability_max[0] + " %";
-        }
-        text += ".";
-      }
-
-      return text;
+      return "Météo à " + place.name + " (" + where + ") : " + Math.round(current.temperature_2m) + " °C, " + condition + ". Vent : " + Math.round(current.wind_speed_10m) + " km/h.";
     } catch (e) {
-      return "Impossible de joindre le service météo. Vérifiez votre connexion.";
+      return "Impossible de joindre le service météo.";
     }
   },
 
   // --------------------------------------------
-  // OUTIL : recherche Wikipédia (gratuit, sans clé)
-  // Renvoie un court résumé et le lien de la source
+  // OUTIL : Wikipédia
   // --------------------------------------------
   async searchWikipedia(query) {
     const q = (query || "").trim();
-    if (!q) {
-      return "Que voulez-vous que je cherche sur Wikipédia ?";
-    }
-
+    if (!q) return "Que chercher sur Wikipédia ?";
     try {
-      // 1) On cherche la page la plus pertinente
-      const searchUrl =
-        "https://fr.wikipedia.org/w/api.php" +
-        "?action=query&list=search&srlimit=1&format=json&formatversion=2&utf8=1&origin=*" +
-        "&srsearch=" + encodeURIComponent(q);
-
-      const searchResponse = await fetch(searchUrl);
-      if (!searchResponse.ok) {
-        return "Je n'arrive pas à joindre Wikipédia pour le moment.";
-      }
+      const searchResponse = await fetch("https://fr.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&formatversion=2&utf8=1&origin=*&srsearch=" + encodeURIComponent(q));
       const searchData = await searchResponse.json();
-
       const hits = searchData.query && searchData.query.search;
-      if (!hits || hits.length === 0) {
-        return "Je n'ai rien trouvé sur Wikipédia pour « " + q + " ».";
-      }
+      if (!hits || hits.length === 0) return "Rien trouvé sur Wikipédia pour « " + q + " ».";
 
       const title = hits[0].title;
-
-      // 2) On récupère le début de la page (résumé)
-      const summaryUrl =
-        "https://fr.wikipedia.org/w/api.php" +
-        "?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=3" +
-        "&redirects=1&format=json&formatversion=2&origin=*" +
-        "&titles=" + encodeURIComponent(title);
-
-      const summaryResponse = await fetch(summaryUrl);
-      if (!summaryResponse.ok) {
-        return "Je n'arrive pas à lire la page Wikipédia pour le moment.";
-      }
+      const summaryResponse = await fetch("https://fr.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=3&redirects=1&format=json&formatversion=2&origin=*&titles=" + encodeURIComponent(title));
       const summaryData = await summaryResponse.json();
+      const page = summaryData.query.pages[0];
+      let extract = page.extract ? page.extract.trim() : "";
+      const link = "https://fr.wikipedia.org/wiki/" + encodeURIComponent(title.replace(/ /g, "_"));
 
-      const pages = summaryData.query && summaryData.query.pages;
-      const page = pages && pages[0];
-      let extract = page && page.extract ? page.extract.trim() : "";
-
-      const link =
-        "https://fr.wikipedia.org/wiki/" +
-        encodeURIComponent(title.replace(/ /g, "_"));
-
-      if (!extract) {
-        return "J'ai trouvé la page « " + title + " » mais sans résumé disponible.\nSource : " + link;
-      }
-
-      // On limite la longueur pour l'écran d'un iPhone
-      if (extract.length > 700) {
-        extract = extract.slice(0, 700).trim() + "…";
-      }
-
-      return "Wikipédia — " + title + " :\n" + extract + "\n\nSource : " + link;
+      if (extract.length > 700) extract = extract.slice(0, 700).trim() + "…";
+      return "Wikipédia — " + title + " :\n" + extract + "\n\nSource : <a href=\"" + link + "\" target=\"_blank\">Lien</a>";
     } catch (e) {
-      return "Impossible de joindre Wikipédia. Vérifiez votre connexion.";
+      return "Impossible de joindre Wikipédia.";
     }
   },
 
   // --------------------------------------------
-  // OUTIL : la liste de tâches (gardée dans la Memory)
-  // action : "add", "list", "done", "delete", "clear"
+  // OUTIL : Tâches
   // --------------------------------------------
   tasksKey: "tasks",
-
-  // Lit la liste de tâches (null si la Memory n'est pas chargée)
   loadTasks() {
     if (typeof NexaMemory === "undefined") return null;
     const list = NexaMemory.recall(this.tasksKey);
     return Array.isArray(list) ? list : [];
   },
-
-  // Enregistre la liste de tâches
   saveTasks(list) {
     if (typeof NexaMemory === "undefined") return false;
     return NexaMemory.remember(this.tasksKey, list);
   },
-
-  // Met la liste en forme : "1. ☐ Appeler le médecin"
   formatTasks(list) {
-    return list
-      .map(function (t, i) {
-        return (i + 1) + ". " + (t.done ? "✅" : "☐") + " " + t.text;
-      })
-      .join("\n");
+    return list.map(function (t, i) { return (i + 1) + ". " + (t.done ? "✅" : "☐") + " " + t.text; }).join("\n");
   },
-
   manageTasks(action, text, number) {
     const list = this.loadTasks();
-    if (list === null) {
-      return "Ma mémoire n'est pas encore connectée.";
-    }
-
-    // Ajouter une tâche
+    if (list === null) return "Ma mémoire n'est pas connectée.";
+    
     if (action === "add") {
       let t = (text || "").trim().slice(0, 200);
-      if (!t) {
-        return "Quelle tâche voulez-vous ajouter ?";
-      }
-      if (list.length >= 50) {
-        return "Votre liste est pleine (50 tâches). Terminez ou supprimez-en avant d'en ajouter.";
-      }
-      t = t.charAt(0).toUpperCase() + t.slice(1);
-      list.push({
-        text: t,
-        done: false,
-        created: new Date().toISOString()
-      });
+      if (!t) return "Quelle tâche ?";
+      list.push({ text: t, done: false });
       this.saveTasks(list);
-      return "C'est ajouté : « " + t + " ». Vous avez " + list.length + " tâche(s) dans votre liste.";
+      return "C'est ajouté : « " + t + " ».";
     }
-
-    // Afficher la liste
     if (action === "list") {
-      if (list.length === 0) {
-        return "Votre liste est vide. Dites par exemple : « Ajoute une tâche : appeler le médecin ».";
-      }
-      const remaining = list.filter(function (t) {
-        return !t.done;
-      }).length;
-      return (
-        "Vos tâches (" + remaining + " à faire sur " + list.length + ") :\n" +
-        this.formatTasks(list)
-      );
+      if (list.length === 0) return "Votre liste est vide.";
+      return "Vos tâches :\n" + this.formatTasks(list);
     }
-
-    // Vider toute la liste
     if (action === "clear") {
-      const count = list.length;
       this.saveTasks([]);
-      return "C'est fait. J'ai vidé votre liste (" + count + " tâche(s) supprimée(s)).";
+      return "Liste vidée.";
     }
-
-    // Terminer ou supprimer : on a besoin d'un numéro valide
     if (action === "done" || action === "delete") {
       const n = Number(number);
-      if (!Number.isInteger(n) || n < 1 || n > list.length) {
-        return "Je ne trouve pas la tâche " + number + ". Écrivez « Mes tâches » pour voir la liste.";
-      }
-
+      if (!Number.isInteger(n) || n < 1 || n > list.length) return "Tâche introuvable.";
       const task = list[n - 1];
-
       if (action === "done") {
-        if (task.done) {
-          return "La tâche " + n + " est déjà terminée : « " + task.text + " ».";
-        }
         task.done = true;
         this.saveTasks(list);
-        return "Bien joué ! Tâche " + n + " terminée : « " + task.text + " ».";
+        return "Tâche " + n + " terminée : « " + task.text + " ».";
       }
-
       list.splice(n - 1, 1);
       this.saveTasks(list);
-      return "C'est supprimé : « " + task.text + " ». Il reste " + list.length + " tâche(s).";
+      return "Supprimé : « " + task.text + " ».";
     }
+    return "Action inconnue.";
+  },
 
-    return "Je ne sais pas faire cette action sur la liste de tâches.";
+  // --------------------------------------------
+  // NOUVEAU OUTIL : Générer un événement Calendrier
+  // --------------------------------------------
+  createCalendarEvent(title, dateStr, timeStr, desc) {
+    try {
+      // Construction pour gérer les fuseaux horaires d'iOS (format ICS)
+      const d = new Date(dateStr + "T" + (timeStr || "12:00"));
+      const dtstart = d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      
+      d.setHours(d.getHours() + 1); // Durée de 1h par défaut
+      const dtend = d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+      const ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//NEXA//FR\nBEGIN:VEVENT\n" +
+        "SUMMARY:" + (title || "Événement NEXA") + "\n" +
+        "DESCRIPTION:" + (desc || "") + "\n" +
+        "DTSTART:" + dtstart + "\nDTEND:" + dtend + "\n" +
+        "END:VEVENT\nEND:VCALENDAR";
+
+      const uri = "data:text/calendar;charset=utf8," + encodeURIComponent(ics);
+      return `<a href="${uri}" download="event.ics" style="display:inline-block; margin-top:8px; padding:10px 14px; background:#292e39; color:#4ade80; border-radius:10px; text-decoration:none;">📅 Ajouter « ${title} » au calendrier</a>`;
+    } catch(e) {
+      return "Erreur lors de la création de l'événement.";
+    }
+  },
+
+  // --------------------------------------------
+  // NOUVEAU OUTIL INTERNE : Lecture de fichiers (Interface -> Brain)
+  // --------------------------------------------
+  processLocalFile(file) {
+    return new Promise(function(resolve) {
+      if (!file) return resolve({ error: "Aucun fichier" });
+      const reader = new FileReader();
+
+      if (file.type.startsWith("image/")) {
+        reader.onload = function(e) { resolve({ name: file.name, type: "image", data: e.target.result }); };
+        reader.onerror = function() { resolve({ error: "Impossible de lire l'image" }); };
+        reader.readAsDataURL(file);
+      } else {
+        reader.onload = function(e) { resolve({ name: file.name, type: "text", data: e.target.result }); };
+        reader.onerror = function() { resolve({ error: "Impossible de lire le fichier" }); };
+        reader.readAsText(file);
+      }
+    });
   }
 };
 
 // --------------------------------------------
-// On déclare les outils dans le registre
+// Déclarations dans le registre
 // --------------------------------------------
-NexaTools.register("heure", "Donne l'heure actuelle.", function () {
-  return NexaTools.getTime();
-});
-
-NexaTools.register("date", "Donne la date d'aujourd'hui.", function () {
-  return NexaTools.getDate();
-});
-
-NexaTools.register("calcul", "Fait un calcul mathématique (argument : expression).", function (args) {
-  return NexaTools.calculate(args.expression || "");
-});
-
-NexaTools.register("meteo", "Donne la météo d'une ville (argument : city).", function (args) {
-  return NexaTools.getWeather(args.city || "");
-});
-
-NexaTools.register("wikipedia", "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).", function (args) {
-  return NexaTools.searchWikipedia(args.query || "");
-});
-
-NexaTools.register("taches", "Gère la liste de tâches (arguments : action = add, list, done, delete ou clear ; text ; number).", function (args) {
-  return NexaTools.manageTasks(args.action, args.text, args.number);
-});
+NexaTools.register("heure", "Donne l'heure.", () => NexaTools.getTime());
+NexaTools.register("date", "Donne la date.", () => NexaTools.getDate());
+NexaTools.register("calcul", "Calcule (args: expression).", (args) => NexaTools.calculate(args.expression));
+NexaTools.register("meteo", "Météo (args: city).", (args) => NexaTools.getWeather(args.city));
+NexaTools.register("wikipedia", "Wiki (args: query).", (args) => NexaTools.searchWikipedia(args.query));
+NexaTools.register("taches", "Tâches (args: action, text, number).", (args) => NexaTools.manageTasks(args.action, args.text, args.number));
+NexaTools.register("calendrier", "Crée un événement (args: title, date (YYYY-MM-DD), time (HH:MM), desc).", (args) => NexaTools.createCalendarEvent(args.title, args.date, args.time, args.desc));
