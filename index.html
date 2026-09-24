@@ -280,12 +280,42 @@
     </div>
 
     <!-- Scripts de l'application avec versioning anti-cache -->
-    <script src="memory.js?v=0.8"></script>
-    <script src="tools.js?v=0.8"></script>
-    <script src="ai.js?v=0.8"></script>
-    <script src="brain.js?v=0.8"></script>
+    <script src="memory.js?v=0.9"></script>
+    <script src="tools.js?v=0.9"></script>
+    <script src="ai.js?v=0.9"></script>
+    <script src="brain.js?v=0.9"></script>
 
     <script>
+        // Logique globale pour faire fonctionner le chronomètre interactif
+        if (!window.chronoTimers) window.chronoTimers = {};
+        
+        function startChrono(id) {
+            if (window.chronoTimers[id]) return;
+            let el = document.getElementById(id);
+            if (!el) return;
+            let [h, m, s] = el.textContent.split(':').map(Number);
+            let totalSeconds = h * 3600 + m * 60 + s;
+            window.chronoTimers[id] = setInterval(() => {
+                totalSeconds++;
+                let hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+                let mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+                let ss = String(totalSeconds % 60).padStart(2, '0');
+                const target = document.getElementById(id);
+                if (target) target.textContent = `${hh}:${mm}:${ss}`;
+            }, 1000);
+        }
+
+        function stopChrono(id) {
+            clearInterval(window.chronoTimers[id]);
+            window.chronoTimers[id] = null;
+        }
+
+        function resetChrono(id) {
+            stopChrono(id);
+            const el = document.getElementById(id);
+            if (el) el.textContent = "00:00:00";
+        }
+
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
