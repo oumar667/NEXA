@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXA</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b0d12;
+      color: white;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 600px;
+      margin: auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 22px 20px;
+      border-bottom: 1px solid #242731;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 25px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+
+    .status {
+      font-size: 12px;
+      color: #888;
+    }
+
+    main {
+      flex: 1;
+      padding: 25px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .welcome {
+      margin-top: 20px;
+      margin-bottom: 25px;
+    }
+
+    .welcome h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .welcome p {
+      color: #9296a3;
+      line-height: 1.5;
+    }
+
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin-bottom: 15px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      line-height: 1.5;
+      max-width: 90%;
+    }
+
+    .user {
+      background: #1d2330;
+      margin-left: auto;
+    }
+
+    .nexa {
+      background: #14171f;
+      border: 1px solid #252a35;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    input {
+      flex: 1;
+      padding: 15px;
+      border-radius: 14px;
+      border: 1px solid #292e39;
+      background: #11141b;
+      color: white;
+      outline: none;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 0 18px;
+      background: white;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app">
+
+    <header>
+      <div class="logo">NEXA</div>
+      <div class="status">BRAIN • OFFLINE</div>
+    </header>
+
+    <main>
+
+      <div class="welcome">
+        <h1>Bonjour.</h1>
+        <p>
+          Je suis NEXA. Votre système intelligent personnel.
+        </p>
+      </div>
+
+      <div id="chat"></div>
+
+      <div class="input-area">
+        <input
+          id="messageInput"
+          type="text"
+          placeholder="Écrivez à NEXA..."
+        >
+
+        <button onclick="sendMessage()">Envoyer</button>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    function sendMessage() {
+
+      const input = document.getElementById("messageInput");
+      const chat = document.getElementById("chat");
+
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      const userMessage = document.createElement("div");
+      userMessage.className = "message user";
+      userMessage.textContent = message;
+
+      chat.appendChild(userMessage);
+
+      input.value = "";
+
+      const nexaMessage = document.createElement("div");
+      nexaMessage.className = "message nexa";
+
+      nexaMessage.textContent =
+        "Votre message a bien été reçu. Le moteur IA de NEXA n'est pas encore connecté.";
+
+      chat.appendChild(nexaMessage);
+
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    document
+      .getElementById("messageInput")
+      .addEventListener("keydown", function(event) {
+        if (event.key === "Enter") {
+          sendMessage();
+        }
+      });
+  </script>
+
+</body>
+</html>
