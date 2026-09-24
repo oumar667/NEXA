@@ -1,18 +1,25 @@
 // ============================================
-// NEXA BRAIN - version 0.3
+// NEXA BRAIN - version 0.4
 // Le cerveau de NEXA : il reçoit un message,
-// utilise la Memory et les Tools, et décide
-// quoi répondre.
+// utilise la Memory, les Tools et le modèle IA,
+// et décide quoi répondre.
 // ============================================
 
 const NexaBrain = {
-  version: "0.3",
+  version: "0.4",
 
   // Fonction principale : reçoit le texte de l'utilisateur
   // et renvoie la réponse de NEXA.
   async think(message) {
     const text = message.trim();
-    const reply = this.decide(text);
+
+    // 1) Les règles du Brain (prénom, heure, calcul...)
+    let reply = this.decide(text);
+
+    // 2) Si aucune règle ne correspond, on demande au modèle IA
+    if (reply === null) {
+      reply = await this.askAI(text);
+    }
 
     // On garde une trace de la conversation dans la Memory
     if (typeof NexaMemory !== "undefined") {
@@ -23,7 +30,55 @@ const NexaBrain = {
     return reply;
   },
 
-  // Décide de la réponse selon le message
+  // Envoie la question au modèle IA, avec du contexte
+  async askAI(text) {
+    if (typeof NexaAI === "undefined") {
+      return (
+        "Mon Brain a bien reçu : « " + text + " ». " +
+        "Le module IA n'est pas encore connecté."
+      );
+    }
+
+    const hasMemory = typeof NexaMemory !== "undefined";
+
+    // Les consignes données au modèle
+    let system =
+      "Tu es NEXA, l'assistant personnel de l'utilisateur. " +
+      "Tu réponds toujours en français, de façon claire, simple et courte, " +
+      "car l'écran est celui d'un iPhone. " +
+      "Si tu ne sais pas, tu le dis honnêtement. " +
+      "Tu n'as pas accès à Internet et tu ne connais pas l'heure exacte.";
+
+    const name = hasMemory ? NexaMemory.recall("prenom") : null;
+    if (name) {
+      system += " L'utilisateur s'appelle " + name + ".";
+    }
+
+    const messages = [{ role: "system", content: system }];
+
+    // Les derniers messages, pour que NEXA suive la conversation
+    if (hasMemory) {
+      const recent = NexaMemory.getHistory()
+        .filter(function (m) {
+          return !(m.role === "nexa" && m.text.startsWith("Mon Brain a bien reçu"));
+        })
+        .slice(-6);
+
+      for (const m of recent) {
+        messages.push({
+          role: m.role === "nexa" ? "assistant" : "user",
+          content: m.text
+        });
+      }
+    }
+
+    messages.push({ role: "user", content: text });
+
+    return await NexaAI.ask(messages);
+  },
+
+  // Décide de la réponse selon le message.
+  // Renvoie null si aucune règle ne correspond.
   decide(text) {
     // On remplace les apostrophes de l'iPhone (’) par des normales (')
     const clean = text.replace(/[’‘`]/g, "'");
@@ -146,10 +201,7 @@ const NexaBrain = {
       return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
     }
 
-    // --- Réponse par défaut ---
-    return (
-      "Mon Brain a bien reçu : « " + text + " ». " +
-      "Je n'ai pas encore de modèle IA connecté."
-    );
+    // --- Aucune règle ne correspond : on laisse le modèle IA répondre ---
+    return null;
   }
 };
