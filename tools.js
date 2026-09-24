@@ -1,12 +1,12 @@
 // ============================================
-// NEXA TOOLS - version 0.2
+// NEXA TOOLS - version 0.3.1
 // Les capacités de NEXA.
-// Nouveauté : un REGISTRE d'outils (chaque outil
-// se déclare) et un premier outil externe : la météo.
+// Registre d'outils + météo (avec choix du pays)
+// + recherche Wikipédia.
 // ============================================
 
 const NexaTools = {
-  version: "0.2",
+  version: "0.3.1",
 
   // --------------------------------------------
   // LE REGISTRE : la liste des outils disponibles
@@ -137,6 +137,82 @@ const NexaTools = {
     99: "orage violent avec grêle"
   },
 
+  // Enlève accents, majuscules, tirets et apostrophes
+  // pour pouvoir comparer deux textes
+  normalize(str) {
+    return (str || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[-'’]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  },
+
+  // Sépare "Saint Louis en France" en
+  // { city: "Saint Louis", hint: "France" }
+  splitPlace(input) {
+    const text = (input || "").trim();
+
+    if (text.includes(",")) {
+      const parts = text.split(",");
+      return {
+        city: parts[0].trim(),
+        hint: parts.slice(1).join(" ").trim()
+      };
+    }
+
+    const match = text.match(
+      /^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i
+    );
+    if (match) {
+      return { city: match[1].trim(), hint: match[2].trim() };
+    }
+
+    return { city: text, hint: "" };
+  },
+
+  // Vérifie si un résultat correspond au pays ou à la région demandés
+  placeMatchesHint(place, hint) {
+    const h = this.normalize(hint);
+    if (!h) return true;
+
+    // Code pays à 2 lettres (ex : "fr")
+    if (h.length === 2 && this.normalize(place.country_code) === h) {
+      return true;
+    }
+    if (h.length < 3) return false;
+
+    const fields = [
+      place.country,
+      place.admin1,
+      place.admin2,
+      place.admin3,
+      place.admin4
+    ]
+      .filter(Boolean)
+      .map(this.normalize.bind(this));
+
+    return fields.some(function (f) {
+      return f === h || f.includes(h);
+    });
+  },
+
+  // Cherche des lieux par nom (Open-Meteo)
+  async findPlaces(name, count) {
+    const url =
+      "https://geocoding-api.open-meteo.com/v1/search?name=" +
+      encodeURIComponent(name) +
+      "&count=" + count + "&language=fr&format=json";
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("geocoding");
+    }
+    const data = await response.json();
+    return data.results || [];
+  },
+
   async getWeather(city) {
     const name = (city || "").trim();
     if (!name) {
@@ -144,23 +220,39 @@ const NexaTools = {
     }
 
     try {
-      // 1) On trouve les coordonnées de la ville
-      const geoUrl =
-        "https://geocoding-api.open-meteo.com/v1/search?name=" +
-        encodeURIComponent(name) +
-        "&count=1&language=fr&format=json";
+      // 1) On trouve la bonne ville (avec le pays si on le connaît)
+      const parts = this.splitPlace(name);
+      let place = null;
 
-      const geoResponse = await fetch(geoUrl);
-      if (!geoResponse.ok) {
-        return "Je n'arrive pas à joindre le service météo pour le moment.";
+      if (parts.hint) {
+        const results = await this.findPlaces(parts.city, 50);
+        const self = this;
+        place = results.find(function (r) {
+          return self.placeMatchesHint(r, parts.hint);
+        }) || null;
       }
-      const geo = await geoResponse.json();
 
-      if (!geo.results || geo.results.length === 0) {
+      if (!place) {
+        // Soit pas de pays indiqué, soit le nom entier est celui d'une ville
+        // (ex : "Bourg en Bresse")
+        const results = await this.findPlaces(name, 10);
+        if (parts.hint) {
+          const hintNorm = this.normalize(parts.hint);
+          const self = this;
+          place = results.find(function (r) {
+            return self.normalize(r.name).includes(hintNorm);
+          }) || null;
+        } else {
+          place = results[0] || null;
+        }
+      }
+
+      if (!place) {
+        if (parts.hint) {
+          return "Je n'ai pas trouvé « " + parts.city + " » (" + parts.hint + ").";
+        }
         return "Je n'ai pas trouvé la ville « " + name + " ».";
       }
-
-      const place = geo.results[0];
 
       // 2) On demande la météo à ces coordonnées
       const weatherUrl =
@@ -184,7 +276,9 @@ const NexaTools = {
         return "Le service météo n'a pas renvoyé de données.";
       }
 
-      const place_name = place.name + (place.country ? " (" + place.country + ")" : "");
+      // Le lieu, avec région et pays pour éviter toute confusion
+      const where = [place.admin1, place.country].filter(Boolean).join(", ");
+      const place_name = place.name + (where ? " (" + where + ")" : "");
       const condition = this.weatherCodes[current.weather_code] || "conditions variables";
 
       let text =
@@ -211,6 +305,72 @@ const NexaTools = {
     } catch (e) {
       return "Impossible de joindre le service météo. Vérifiez votre connexion.";
     }
+  },
+
+  // --------------------------------------------
+  // OUTIL : recherche Wikipédia (gratuit, sans clé)
+  // Renvoie un court résumé et le lien de la source
+  // --------------------------------------------
+  async searchWikipedia(query) {
+    const q = (query || "").trim();
+    if (!q) {
+      return "Que voulez-vous que je cherche sur Wikipédia ?";
+    }
+
+    try {
+      // 1) On cherche la page la plus pertinente
+      const searchUrl =
+        "https://fr.wikipedia.org/w/api.php" +
+        "?action=query&list=search&srlimit=1&format=json&formatversion=2&utf8=1&origin=*" +
+        "&srsearch=" + encodeURIComponent(q);
+
+      const searchResponse = await fetch(searchUrl);
+      if (!searchResponse.ok) {
+        return "Je n'arrive pas à joindre Wikipédia pour le moment.";
+      }
+      const searchData = await searchResponse.json();
+
+      const hits = searchData.query && searchData.query.search;
+      if (!hits || hits.length === 0) {
+        return "Je n'ai rien trouvé sur Wikipédia pour « " + q + " ».";
+      }
+
+      const title = hits[0].title;
+
+      // 2) On récupère le début de la page (résumé)
+      const summaryUrl =
+        "https://fr.wikipedia.org/w/api.php" +
+        "?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=3" +
+        "&redirects=1&format=json&formatversion=2&origin=*" +
+        "&titles=" + encodeURIComponent(title);
+
+      const summaryResponse = await fetch(summaryUrl);
+      if (!summaryResponse.ok) {
+        return "Je n'arrive pas à lire la page Wikipédia pour le moment.";
+      }
+      const summaryData = await summaryResponse.json();
+
+      const pages = summaryData.query && summaryData.query.pages;
+      const page = pages && pages[0];
+      let extract = page && page.extract ? page.extract.trim() : "";
+
+      const link =
+        "https://fr.wikipedia.org/wiki/" +
+        encodeURIComponent(title.replace(/ /g, "_"));
+
+      if (!extract) {
+        return "J'ai trouvé la page « " + title + " » mais sans résumé disponible.\nSource : " + link;
+      }
+
+      // On limite la longueur pour l'écran d'un iPhone
+      if (extract.length > 700) {
+        extract = extract.slice(0, 700).trim() + "…";
+      }
+
+      return "Wikipédia — " + title + " :\n" + extract + "\n\nSource : " + link;
+    } catch (e) {
+      return "Impossible de joindre Wikipédia. Vérifiez votre connexion.";
+    }
   }
 };
 
@@ -231,4 +391,8 @@ NexaTools.register("calcul", "Fait un calcul mathématique (argument : expressio
 
 NexaTools.register("meteo", "Donne la météo d'une ville (argument : city).", function (args) {
   return NexaTools.getWeather(args.city || "");
+});
+
+NexaTools.register("wikipedia", "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).", function (args) {
+  return NexaTools.searchWikipedia(args.query || "");
 });
