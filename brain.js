@@ -1,19 +1,20 @@
 // ============================================
-// NEXA BRAIN - version 0.4
+// NEXA BRAIN - version 0.5
 // Le cerveau de NEXA : il reçoit un message,
 // utilise la Memory, les Tools et le modèle IA,
 // et décide quoi répondre.
+// Nouveauté : notes libres ("Retiens que ...").
 // ============================================
 
 const NexaBrain = {
-  version: "0.4",
+  version: "0.5",
 
   // Fonction principale : reçoit le texte de l'utilisateur
   // et renvoie la réponse de NEXA.
   async think(message) {
     const text = message.trim();
 
-    // 1) Les règles du Brain (prénom, heure, calcul...)
+    // 1) Les règles du Brain (prénom, notes, heure, calcul...)
     let reply = this.decide(text);
 
     // 2) Si aucune règle ne correspond, on demande au modèle IA
@@ -28,6 +29,19 @@ const NexaBrain = {
     }
 
     return reply;
+  },
+
+  // Renvoie la liste des notes enregistrées
+  getNotes() {
+    if (typeof NexaMemory === "undefined") return [];
+    const facts = NexaMemory.load().facts;
+    const notes = [];
+    for (const key of Object.keys(facts)) {
+      if (key.startsWith("note_")) {
+        notes.push({ key: key, text: facts[key] });
+      }
+    }
+    return notes;
   },
 
   // Envoie la question au modèle IA, avec du contexte
@@ -52,6 +66,16 @@ const NexaBrain = {
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
     if (name) {
       system += " L'utilisateur s'appelle " + name + ".";
+    }
+
+    // Les notes que l'utilisateur t'a demandé de retenir
+    const notes = this.getNotes();
+    if (notes.length > 0) {
+      system += " Voici ce que l'utilisateur t'a demandé de retenir :";
+      for (const n of notes) {
+        system += " - " + n.text + ".";
+      }
+      system += " Utilise ces informations quand c'est pertinent.";
     }
 
     const messages = [{ role: "system", content: system }];
@@ -86,6 +110,68 @@ const NexaBrain = {
     const hasMemory = typeof NexaMemory !== "undefined";
     const hasTools = typeof NexaTools !== "undefined";
 
+    // --- Retenir une note libre ---
+    const noteMatch = clean.match(
+      /(?:retiens|retenir|souviens-toi|souviens toi|n'oublie pas)\s+(?:que|qu')\s*(.+)/i
+    );
+    if (noteMatch) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const note = noteMatch[1].trim().slice(0, 300);
+      if (!note) {
+        return "Que dois-je retenir ? Dites par exemple : « Retiens que j'aime le café ».";
+      }
+      NexaMemory.remember("note_" + Date.now(), note);
+      return "C'est noté : « " + note + " ». Je m'en souviendrai.";
+    }
+
+    // --- Afficher ce que NEXA retient ---
+    if (
+      lower.includes("que retiens-tu") ||
+      lower.includes("que retiens tu") ||
+      lower.includes("qu'est-ce que tu retiens") ||
+      lower.includes("que sais-tu sur moi") ||
+      lower.includes("que sais tu sur moi") ||
+      lower.includes("que sais-tu de moi") ||
+      lower.includes("que sais tu de moi") ||
+      lower.includes("mes notes")
+    ) {
+      // "oublie mes notes" est traité plus bas
+      if (!lower.includes("oublie")) {
+        if (!hasMemory) {
+          return "Ma mémoire n'est pas encore connectée.";
+        }
+        const name = NexaMemory.recall("prenom");
+        const notes = this.getNotes();
+
+        if (!name && notes.length === 0) {
+          return "Je ne retiens rien pour le moment. Dites-moi par exemple : « Retiens que j'aime le café ».";
+        }
+
+        let answer = "Voici ce que je retiens :";
+        if (name) {
+          answer += "\n- Prénom : " + name;
+        }
+        for (const n of notes) {
+          answer += "\n- " + n.text;
+        }
+        return answer;
+      }
+    }
+
+    // --- Oublier les notes ---
+    if (lower.includes("oublie mes notes") || lower.includes("efface mes notes")) {
+      if (!hasMemory) {
+        return "Ma mémoire n'est pas encore connectée.";
+      }
+      const notes = this.getNotes();
+      for (const n of notes) {
+        NexaMemory.forget(n.key);
+      }
+      return "C'est fait. J'ai oublié vos notes (" + notes.length + ").";
+    }
+
     // --- Retrouver le prénom ---
     if (
       lower.includes("comment je m'appelle") ||
@@ -102,7 +188,7 @@ const NexaBrain = {
       return "Je ne connais pas encore votre prénom. Dites-moi : « Je m'appelle ... ».";
     }
 
-    // --- Oublier ---
+    // --- Oublier tout ---
     if (lower.includes("oublie tout")) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
