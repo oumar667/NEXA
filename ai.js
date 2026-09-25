@@ -1,52 +1,84 @@
 // ============================================
-// NEXA AI - version 0.4
-// Le lien entre NEXA et le modèle IA (Routeur Free)
+// NEXA AI - version 0.1
+// Le lien entre NEXA et le modèle IA.
+// Service : OpenRouter (modèles gratuits uniquement)
+// La clé reste sur ton iPhone, jamais dans le code.
 // ============================================
 
 const NexaAI = {
-  version: "0.4",
-  keyStorage: "NEXA_API_KEY",
+  version: "0.1",
+  keyStorage: "nexa_openrouter_key",
   endpoint: "https://openrouter.ai/api/v1/chat/completions",
+
+  // Modèle gratuit : OpenRouter choisit lui-même
+  // un modèle gratuit disponible.
   model: "openrouter/free",
 
+  // Lit la clé enregistrée sur cet appareil
   getKey() {
-    try { return localStorage.getItem(this.keyStorage); }
-    catch (e) { return null; }
+    try {
+      return localStorage.getItem(this.keyStorage);
+    } catch (e) {
+      return null;
+    }
   },
 
+  // Enregistre la clé sur cet appareil
   setKey(key) {
     try {
       localStorage.setItem(this.keyStorage, key);
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   },
 
-  async ask(userText) {
-    const key = this.getKey();
-    if (!key) return "🚨 ERREUR : Clé API manquante. Configure-la via le bouton ⋯ en haut à droite.";
+  // Supprime la clé de cet appareil
+  clearKey() {
+    try {
+      localStorage.removeItem(this.keyStorage);
+    } catch (e) {
+      // rien à faire
+    }
+  },
 
-    const messages = [
-      {
-        role: "system",
-        content: "Tu es NEXA, un assistant IA intelligent, direct et utile."
-      },
-      {
-        role: "user",
-        content: userText
-      }
-    ];
+  // Vérifie qu'une clé existe, sinon la demande
+  // dans une fenêtre de saisie.
+  ensureKey() {
+    const existing = this.getKey();
+    if (existing) {
+      return existing;
+    }
+    const entered = window.prompt(
+      "Collez votre clé OpenRouter. Elle reste enregistrée uniquement sur cet appareil."
+    );
+    if (entered && entered.trim()) {
+      const key = entered.trim();
+      this.setKey(key);
+      return key;
+    }
+    return null;
+  },
 
+  // Envoie une conversation au modèle et renvoie sa réponse.
+  // "messages" est une LISTE d'objets, par exemple :
+  // [{ role: "system", content: "..." }, { role: "user", content: "Bonjour" }]
+  async ask(messages) {
+    const key = this.ensureKey();
+    if (!key) {
+      return "Je n'ai pas de clé OpenRouter, donc je ne peux pas utiliser le modèle IA pour l'instant.";
+    }
+
+    // Sécurité : on abandonne si la réponse dépasse 60 secondes
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), 60000);
 
     try {
       const response = await fetch(this.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + key,
-          "HTTP-Referer": "https://oumar667.github.io/NEXA/",
-          "X-Title": "NEXA"
+          "Authorization": "Bearer " + key
         },
         body: JSON.stringify({
           model: this.model,
@@ -56,19 +88,49 @@ const NexaAI = {
       });
 
       let data = null;
-      try { data = await response.json(); } catch (e) {}
-
-      if (!response.ok) {
-        const errDetail = data && data.error && data.error.message ? data.error.message : response.statusText;
-        return `🚨 ERREUR RÉSEAU (${response.status}) : ${errDetail}`;
+      try {
+        data = await response.json();
+      } catch (e) {
+        // réponse illisible
       }
 
-      const content = data?.choices?.[0]?.message?.content;
-      return (content && content.trim()) ? content.trim() : "L'IA n'a renvoyé aucune réponse.";
+      if (!response.ok) {
+        const detail =
+          data && data.error && data.error.message
+            ? " Détail : " + data.error.message
+            : "";
+
+        if (response.status === 401) {
+          // Clé refusée : on l'oublie pour la redemander
+          this.clearKey();
+          return "OpenRouter a refusé la clé. Je l'ai effacée : envoyez un nouveau message et je vous la redemanderai." + detail;
+        }
+        if (response.status === 429) {
+          return "Limite gratuite atteinte (trop de messages). Réessayez dans une minute, ou demain si la limite du jour est atteinte." + detail;
+        }
+        if (response.status === 402) {
+          return "OpenRouter indique un problème de crédit pour ce modèle." + detail;
+        }
+        return "Erreur du service IA (code " + response.status + ")." + detail;
+      }
+
+      const content =
+        data &&
+        data.choices &&
+        data.choices[0] &&
+        data.choices[0].message &&
+        data.choices[0].message.content;
+
+      if (content && content.trim()) {
+        return content.trim();
+      }
+      return "Le modèle n'a pas renvoyé de réponse. Réessayez.";
 
     } catch (e) {
-      if (e.name === "AbortError") return "🚨 L'IA a mis trop de temps à répondre.";
-      return `🚨 ERREUR SYSTÈME : ${e.message}`;
+      if (e.name === "AbortError") {
+        return "Le modèle a mis trop de temps à répondre. Réessayez.";
+      }
+      return "Impossible de joindre le modèle IA. Vérifiez votre connexion.";
     } finally {
       clearTimeout(timer);
     }
