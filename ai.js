@@ -1,93 +1,63 @@
 // ============================================
-// NEXA AI - version 0.2
-// Le lien entre NEXA et le modèle IA.
-// Prise en charge des requêtes Vision (images)
+// NEXA AI - Version Haute Précision & Vitesse
+// Gestion des appels API et rigueur analytique
 // ============================================
 
 const NexaAI = {
-  version: "0.2",
-  keyStorage: "nexa_openrouter_key",
-  endpoint: "https://openrouter.ai/api/v1/chat/completions",
+  // Remplace par ta clé API Gemini si ce n'est pas déjà fait dans ton environnement
+  apiKey: "", // Si tu utilises une clé en dur ou gérée par ton Brain, laisse l'appel dynamique
 
-  // Modèle gratuit : OpenRouter choisit lui-même
-  model: "openrouter/free",
-
-  getKey() {
-    try { return localStorage.getItem(this.keyStorage); }
-    catch (e) { return null; }
-  },
-
-  setKey(key) {
+  async generateResponse(userPrompt, contextData = null, systemContext = "") {
     try {
-      localStorage.setItem(this.keyStorage, key);
-      return true;
-    } catch (e) { return false; }
-  },
+      // Prompt système strict axé sur la rigueur, la concision et la vérité
+      const systemInstruction = `Tu es NEXA, un assistant virtuel personnel ultra-rapide, intelligent et d'une précision absolue. 
+Règles absolues :
+1. Ne donne jamais d'informations fausses ou incertaines. Si tu n'es pas sûr à 100%, signale-le ou fais une double vérification logique.
+2. Sois direct, concis, structuré et performant. Pas de bavardage inutile.
+3. Utilise un formatage propre en gras (**texte**) pour les points clés.
+${systemContext}`;
 
-  clearKey() {
-    try { localStorage.removeItem(this.keyStorage); }
-    catch (e) {}
-  },
-
-  ensureKey() {
-    const existing = this.getKey();
-    if (existing) return existing;
-    
-    const entered = window.prompt("Collez votre clé OpenRouter. Elle reste enregistrée uniquement sur cet appareil.");
-    if (entered && entered.trim()) {
-      const key = entered.trim();
-      this.setKey(key);
-      return key;
-    }
-    return null;
-  },
-
-  async ask(messages) {
-    const key = this.ensureKey();
-    if (!key) return "Je n'ai pas de clé OpenRouter, donc je ne peux pas utiliser l'IA pour l'instant.";
-
-    // Sécurité : On passe à 60 secondes car l'analyse d'une image prend plus de temps
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
-
-    try {
-      const response = await fetch(this.endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + key
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: messages
-        }),
-        signal: controller.signal
-      });
-
-      let data = null;
-      try { data = await response.json(); } catch (e) {}
-
-      if (!response.ok) {
-        const detail = data && data.error && data.error.message ? " Détail : " + data.error.message : "";
-        
-        if (response.status === 401) {
-          this.clearKey();
-          return "OpenRouter a refusé la clé. Je l'ai effacée : envoyez un nouveau message pour la redemander." + detail;
-        }
-        if (response.status === 429) {
-          return "Limite gratuite atteinte. Réessayez dans une minute." + detail;
-        }
-        return "Erreur du service IA (code " + response.status + ")." + detail;
+      let fullPrompt = `${systemInstruction}\n\nRequête de l'utilisateur : ${userPrompt}`;
+      if (contextData) {
+        fullPrompt += `\n\nDonnées contextuelles / Fichier attaché (${contextData.name}) :\n${contextData.content}`;
       }
 
-      const content = data?.choices?.[0]?.message?.content;
-      return (content && content.trim()) ? content.trim() : "Le modèle n'a pas renvoyé de réponse.";
+      // Appel optimisé pour la vitesse avec une température basse (0.2) pour maximiser la précision
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.getApiKey()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: {
+            temperature: 0.2, // Température basse = réponses factuelles, rigoureuses et sans invention
+            maxOutputTokens: 1000,
+          }
+        })
+      });
 
-    } catch (e) {
-      if (e.name === "AbortError") return "L'IA a mis trop de temps à analyser la demande. Réessayez.";
-      return "Impossible de joindre le modèle IA. Vérifiez votre connexion.";
-    } finally {
-      clearTimeout(timer);
+      if (!response.ok) throw new Error("Erreur de communication avec le réseau neuronal de NEXA.");
+
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+
+      if (candidate && candidate.content?.parts?.[0]?.text) {
+        return candidate.content.parts[0].text;
+      } else {
+        return "Je n'ai pas pu générer de réponse claire. Veuillez reformuler.";
+      }
+
+    } catch (error) {
+      console.error("Erreur NexaAI:", error);
+      return "Erreur de traitement. Vérifiez votre connexion.";
     }
+  },
+
+  getApiKey() {
+    // Récupération sécurisée de la clé (depuis brain.js ou localStorage si configuré)
+    if (typeof NexaBrain !== "undefined" && NexaBrain.API_KEY) {
+      return NexaBrain.API_KEY;
+    }
+    // Clé de secours si définie globalement
+    return window.NEXA_API_KEY || "";
   }
 };
