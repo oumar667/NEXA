@@ -14,7 +14,7 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #050508;
+      background: #030308;
       color: #ffffff;
       min-height: 100vh;
       overflow-x: hidden;
@@ -22,195 +22,203 @@
       flex-direction: column;
     }
 
-    /* Fond avec glow subtil */
     .bg-glow {
       position: fixed;
       inset: 0;
       background: 
-        radial-gradient(ellipse 80% 50% at 50% 100%, rgba(56, 189, 248, 0.15) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 80% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 30% at 20% 30%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+        radial-gradient(ellipse 90% 60% at 50% 110%, rgba(56, 189, 248, 0.22) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 50% at 85% 15%, rgba(168, 85, 247, 0.18) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 15% 25%, rgba(236, 72, 153, 0.12) 0%, transparent 50%);
       pointer-events: none;
       z-index: 0;
     }
 
-    /* Header */
     header {
       position: relative;
       z-index: 10;
-      padding: 16px 20px 8px;
+      padding: 18px 20px 6px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
-    .logo {
-      display: flex;
-      flex-direction: column;
-    }
-
     .logo-text {
-      font-size: 22px;
+      font-size: 23px;
       font-weight: 700;
       letter-spacing: -0.5px;
       background: linear-gradient(90deg, #38bdf8, #a855f7);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      background-clip: text;
     }
 
     .logo-sub {
       font-size: 11px;
       color: #94a3b8;
-      margin-top: 1px;
+      margin-top: 2px;
       font-weight: 500;
     }
 
     .menu-btn {
-      width: 40px;
-      height: 40px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
       background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
     }
 
     .menu-btn span {
       display: block;
-      width: 16px;
+      width: 17px;
       height: 2px;
       background: #e2e8f0;
       border-radius: 1px;
       position: relative;
     }
-
     .menu-btn span::before,
     .menu-btn span::after {
       content: "";
       position: absolute;
       left: 0;
-      width: 16px;
+      width: 17px;
       height: 2px;
       background: #e2e8f0;
       border-radius: 1px;
     }
+    .menu-btn span::before { top: -5.5px; }
+    .menu-btn span::after  { top: 5.5px; }
 
-    .menu-btn span::before { top: -5px; }
-    .menu-btn span::after { top: 5px; }
-
-    /* Greeting */
     .greeting {
       position: relative;
       z-index: 10;
-      padding: 24px 24px 28px;
+      padding: 28px 24px 32px;
       text-align: center;
     }
 
     .greeting h1 {
-      font-size: 36px;
+      font-size: 38px;
       font-weight: 600;
-      letter-spacing: -1px;
-      margin-bottom: 8px;
+      letter-spacing: -1.2px;
+      margin-bottom: 10px;
       color: #f8fafc;
     }
 
     .greeting p {
-      font-size: 15px;
+      font-size: 15.5px;
       color: #94a3b8;
-      line-height: 1.4;
-      max-width: 280px;
-      margin: 0 auto;
+      line-height: 1.45;
     }
 
     .greeting p span {
-      color: #a78bfa;
+      color: #c084fc;
       font-weight: 500;
     }
 
-    /* Grid des domaines */
     .domains {
       position: relative;
       z-index: 10;
       flex: 1;
-      padding: 0 16px 100px;
+      padding: 0 16px 110px;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 13px;
       max-width: 480px;
       margin: 0 auto;
       width: 100%;
     }
 
     .card {
-      border-radius: 20px;
+      border-radius: 22px;
       padding: 18px 16px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 110px;
+      min-height: 118px;
       position: relative;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.2s ease;
     }
 
+    /* ===== MAISON ACTIVE (très vive) ===== */
     .card.active {
-      background: linear-gradient(145deg, rgba(14, 165, 233, 0.25), rgba(56, 189, 248, 0.15));
-      border-color: rgba(56, 189, 248, 0.45);
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      background: linear-gradient(145deg, rgba(14, 165, 233, 0.38), rgba(56, 189, 248, 0.22));
+      border-color: rgba(56, 189, 248, 0.7);
+      box-shadow: 
+        0 0 32px rgba(56, 189, 248, 0.45),
+        0 0 12px rgba(56, 189, 248, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
 
-    .card:not(.active) {
-      background: rgba(255, 255, 255, 0.04);
-      opacity: 0.72;
-    }
-
-    .card-title {
-      font-size: 17px;
-      font-weight: 600;
-      color: #f1f5f9;
-      margin-bottom: 4px;
-    }
-
-    .card-sub {
-      font-size: 12px;
-      color: #94a3b8;
-      font-weight: 400;
+    .card.active .card-title {
+      color: #ffffff;
     }
 
     .card.active .card-sub {
       color: #7dd3fc;
     }
 
+    /* ===== AUTRES CARTES (plus colorées) ===== */
+    .card:not(.active) {
+      background: rgba(255, 255, 255, 0.05);
+      opacity: 0.92;
+    }
+
+    .card[data-domain="work"] {
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .card[data-domain="robotics"] {
+      border-color: rgba(168, 85, 247, 0.45);
+      background: linear-gradient(145deg, rgba(168, 85, 247, 0.12), rgba(168, 85, 247, 0.04));
+    }
+    .card[data-domain="energy"] {
+      border-color: rgba(234, 179, 8, 0.45);
+      background: linear-gradient(145deg, rgba(234, 179, 8, 0.12), rgba(234, 179, 8, 0.04));
+    }
+    .card[data-domain="auto"] {
+      border-color: rgba(249, 115, 22, 0.45);
+      background: linear-gradient(145deg, rgba(249, 115, 22, 0.12), rgba(249, 115, 22, 0.04));
+    }
+    .card[data-domain="care"] {
+      border-color: rgba(236, 72, 153, 0.45);
+      background: linear-gradient(145deg, rgba(236, 72, 153, 0.12), rgba(236, 72, 153, 0.04));
+    }
+    .card[data-domain="business"] {
+      grid-column: 1 / -1;
+      border-color: rgba(20, 184, 166, 0.4);
+      background: linear-gradient(145deg, rgba(20, 184, 166, 0.12), rgba(20, 184, 166, 0.04));
+    }
+
+    .card-title {
+      font-size: 17.5px;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 4px;
+    }
+
+    .card-sub {
+      font-size: 12.5px;
+      color: #94a3b8;
+    }
+
     .card-icon {
       position: absolute;
-      right: 14px;
-      bottom: 14px;
-      font-size: 28px;
-      opacity: 0.9;
+      right: 16px;
+      bottom: 16px;
+      font-size: 30px;
+      line-height: 1;
     }
 
     .card.active .card-icon {
-      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+      filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.8));
     }
 
-    /* Couleurs spécifiques pour chaque carte (légères) */
-    .card[data-domain="robotics"] { border-color: rgba(168, 85, 247, 0.2); }
-    .card[data-domain="energy"]   { border-color: rgba(234, 179, 8, 0.2); }
-    .card[data-domain="auto"]     { border-color: rgba(249, 115, 22, 0.2); }
-    .card[data-domain="care"]     { border-color: rgba(236, 72, 153, 0.2); }
-    .card[data-domain="business"] { 
-      grid-column: 1 / -1;
-      border-color: rgba(20, 184, 166, 0.2);
-    }
-
-    /* Barre de saisie flottante */
+    /* Barre de saisie */
     .input-bar {
       position: fixed;
-      bottom: 24px;
+      bottom: 22px;
       left: 16px;
       right: 16px;
       z-index: 50;
@@ -221,27 +229,26 @@
     .input-container {
       display: flex;
       align-items: center;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 28px;
-      padding: 8px 10px 8px 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 30px;
+      padding: 8px 10px 8px 14px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     }
 
     .plus-btn {
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
       background: rgba(255, 255, 255, 0.1);
       border: none;
       color: #e2e8f0;
-      font-size: 22px;
+      font-size: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
       flex-shrink: 0;
     }
 
@@ -251,7 +258,7 @@
       border: none;
       outline: none;
       color: #f1f5f9;
-      font-size: 16px;
+      font-size: 16.5px;
       padding: 0 12px;
       font-family: inherit;
     }
@@ -261,8 +268,8 @@
     }
 
     .mic-btn {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       background: linear-gradient(135deg, #38bdf8, #a855f7);
       border: none;
@@ -271,15 +278,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
       flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.5);
     }
 
-    /* Safe area iPhone */
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
       .input-bar {
-        bottom: calc(16px + env(safe-area-inset-bottom));
+        bottom: calc(14px + env(safe-area-inset-bottom));
       }
     }
   </style>
@@ -288,13 +293,11 @@
   <div class="bg-glow"></div>
 
   <header>
-    <div class="logo">
+    <div>
       <div class="logo-text">NEXA</div>
       <div class="logo-sub">Neural Expressive</div>
     </div>
-    <div class="menu-btn">
-      <span></span>
-    </div>
+    <div class="menu-btn"><span></span></div>
   </header>
 
   <section class="greeting">
@@ -303,7 +306,6 @@
   </section>
 
   <main class="domains">
-    <!-- Maison - ACTIVE -->
     <div class="card active" data-domain="maison">
       <div>
         <div class="card-title">Maison</div>
@@ -312,7 +314,6 @@
       <div class="card-icon">🏠</div>
     </div>
 
-    <!-- Work -->
     <div class="card" data-domain="work">
       <div>
         <div class="card-title">Work</div>
@@ -321,7 +322,6 @@
       <div class="card-icon">💼</div>
     </div>
 
-    <!-- Robotics -->
     <div class="card" data-domain="robotics">
       <div>
         <div class="card-title">Robotics</div>
@@ -330,7 +330,6 @@
       <div class="card-icon">🤖</div>
     </div>
 
-    <!-- Energy -->
     <div class="card" data-domain="energy">
       <div>
         <div class="card-title">Energy</div>
@@ -339,7 +338,6 @@
       <div class="card-icon">⚡</div>
     </div>
 
-    <!-- Auto -->
     <div class="card" data-domain="auto">
       <div>
         <div class="card-title">Auto</div>
@@ -348,7 +346,6 @@
       <div class="card-icon">🚗</div>
     </div>
 
-    <!-- Care -->
     <div class="card" data-domain="care">
       <div>
         <div class="card-title">Care</div>
@@ -357,7 +354,6 @@
       <div class="card-icon">❤️</div>
     </div>
 
-    <!-- Business (pleine largeur) -->
     <div class="card" data-domain="business">
       <div>
         <div class="card-title">Business</div>
@@ -367,7 +363,6 @@
     </div>
   </main>
 
-  <!-- Barre de saisie -->
   <div class="input-bar">
     <div class="input-container">
       <button class="plus-btn">+</button>
@@ -377,12 +372,9 @@
   </div>
 
   <script>
-    // Placeholder : on ne touche pas encore à la logique
-    // Les cartes non actives ne font rien pour l'instant
     document.querySelectorAll('.card:not(.active)').forEach(card => {
       card.style.cursor = 'default';
     });
-
     document.querySelector('.card.active').style.cursor = 'pointer';
   </script>
 </body>
