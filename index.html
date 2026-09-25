@@ -341,6 +341,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <!-- Overlay pour la sidebar -->
@@ -352,6 +353,7 @@
             <span>Historique</span>
             <button class="icon-btn" id="close-sidebar">✕</button>
         </div>
+
         <div id="history-list" class="sidebar-content">
             <!-- Les discussions passées s'afficheront ici -->
         </div>
@@ -360,12 +362,15 @@
     <header>
         <div class="header-left">
             <button class="icon-btn" id="menu-btn" title="Menu">☰</button>
+
             <div class="logo-area">
                 <span>✨</span> NEXA
             </div>
         </div>
+
         <div class="header-right">
             <div id="status" class="status-badge">ONLINE</div>
+
             <button class="icon-btn" id="new-chat-btn" title="Nouveau chat">✏️</button>
             <button class="icon-btn" id="options-btn" title="Options">⋯</button>
         </div>
@@ -381,10 +386,23 @@
 
     <div class="input-area">
         <div id="attachment-preview" class="attachment-preview"></div>
+
         <div class="input-box-wrapper">
             <button id="file-btn" title="Joindre un fichier">+</button>
-            <input type="file" id="file-input" style="display: none;" accept="image/*,.txt,.pdf,.json,.js,.html,.css">
-            <textarea id="user-input" rows="1" placeholder="Posez une question..."></textarea>
+
+            <input
+                type="file"
+                id="file-input"
+                style="display: none;"
+                accept="image/*,.txt,.pdf,.json,.js,.html,.css"
+            >
+
+            <textarea
+                id="user-input"
+                rows="1"
+                placeholder="Posez une question..."
+            ></textarea>
+
             <button id="send-btn" title="Envoyer">↑</button>
         </div>
     </div>
@@ -393,25 +411,38 @@
     <script src="memory.js?v=2.0"></script>
     <script src="tools.js?v=2.0"></script>
     <script src="ai.js?v=2.0"></script>
+
+    <!-- NEXA AGENT -->
+    <script src="agent.js?v=0.1"></script>
+
+    <!-- Brain principal -->
     <script src="brain.js?v=2.0"></script>
 
     <script>
         // Logique globale du Chronomètre
         if (!window.chronoTimers) window.chronoTimers = {};
-        
+
         function startChrono(id) {
             if (window.chronoTimers[id]) return;
+
             let el = document.getElementById(id);
             if (!el) return;
+
             let [h, m, s] = el.textContent.split(':').map(Number);
             let totalSeconds = h * 3600 + m * 60 + s;
+
             window.chronoTimers[id] = setInterval(() => {
                 totalSeconds++;
+
                 let hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
                 let mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
                 let ss = String(totalSeconds % 60).padStart(2, '0');
+
                 const target = document.getElementById(id);
-                if (target) target.textContent = `${hh}:${mm}:${ss}`;
+
+                if (target) {
+                    target.textContent = `${hh}:${mm}:${ss}`;
+                }
             }, 1000);
         }
 
@@ -422,27 +453,45 @@
 
         function resetChrono(id) {
             stopChrono(id);
+
             const el = document.getElementById(id);
-            if (el) el.textContent = "00:00:00";
+
+            if (el) {
+                el.textContent = "00:00:00";
+            }
         }
 
         // Gestion de l'historique dans le localStorage
         function getHistory() {
             try {
                 return JSON.parse(localStorage.getItem('nexa_history')) || [];
-            } catch(e) { return []; }
+            } catch(e) {
+                return [];
+            }
         }
 
         function saveToHistory(text) {
-            // Protection : si l'enregistrement échoue (mémoire pleine,
-            // navigation privée...), on ne bloque pas l'envoi du message.
+            // Protection : si l'enregistrement échoue
+            // (mémoire pleine, navigation privée...),
+            // on ne bloque pas l'envoi du message.
             if (!text) return;
+
             try {
                 let history = getHistory();
+
                 history.unshift(text);
-                if (history.length > 20) history.pop(); // Garde les 20 derniers
-                localStorage.setItem('nexa_history', JSON.stringify(history));
+
+                if (history.length > 20) {
+                    history.pop();
+                }
+
+                localStorage.setItem(
+                    'nexa_history',
+                    JSON.stringify(history)
+                );
+
                 renderHistory();
+
             } catch (e) {
                 // On continue quand même sans bloquer l'envoi
             }
@@ -451,17 +500,27 @@
         function renderHistory() {
             const historyList = document.getElementById('history-list');
             const history = getHistory();
+
             if (history.length === 0) {
-                historyList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; text-align:center; margin-top:20px;">Aucun historique</p>';
+                historyList.innerHTML =
+                    '<p style="color:var(--text-secondary); font-size:0.85rem; text-align:center; margin-top:20px;">Aucun historique</p>';
+
                 return;
             }
-            historyList.innerHTML = history.map(item => `<div class="history-item" onclick="loadHistoryItem('${item.replace(/'/g, "\\'")}')">${item}</div>`).join('');
+
+            historyList.innerHTML = history
+                .map(item =>
+                    `<div class="history-item" onclick="loadHistoryItem('${item.replace(/'/g, "\\'")}')">${item}</div>`
+                )
+                .join('');
         }
 
         function loadHistoryItem(text) {
             userInput.value = text;
+
             sidebar.classList.remove('open');
             overlay.classList.remove('active');
+
             userInput.focus();
         }
 
@@ -475,6 +534,7 @@
 
         menuBtn.addEventListener('click', () => {
             renderHistory();
+
             sidebar.classList.add('open');
             overlay.classList.add('active');
         });
@@ -497,6 +557,7 @@
                     <p>Comment puis-je vous aider aujourd'hui ?</p>
                 </div>
             `;
+
             isFirstMessage = true;
         });
 
@@ -519,11 +580,13 @@
 
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
+
             if (!file) return;
 
             statusBadge.textContent = "CHARGEMENT";
+
             const result = await NexaTools.processLocalFile(file);
-            
+
             if (result.error) {
                 alert(result.error);
                 statusBadge.textContent = "ONLINE";
@@ -531,8 +594,10 @@
             }
 
             currentAttachment = result;
+
             attachmentPreview.textContent = `📎 ${result.name}`;
             attachmentPreview.style.display = "inline-block";
+
             statusBadge.textContent = "FICHIER PRÊT";
         });
 
@@ -543,6 +608,7 @@
 
         async function handleSend() {
             const text = userInput.value.trim();
+
             if (!text && !currentAttachment) return;
 
             if (isFirstMessage) {
@@ -550,57 +616,100 @@
                 isFirstMessage = false;
             }
 
-            // Enregistrer dans l'historique local (protégé, ne bloque plus l'envoi)
-            if (text) saveToHistory(text);
+            // Enregistrer dans l'historique local
+            if (text) {
+                saveToHistory(text);
+            }
 
             const userBubble = document.createElement('div');
+
             userBubble.className = 'message user-message';
-            userBubble.textContent = text + (currentAttachment ? ` [📎 ${currentAttachment.name}]` : '');
+
+            userBubble.textContent =
+                text +
+                (currentAttachment
+                    ? ` [📎 ${currentAttachment.name}]`
+                    : '');
+
             chatContainer.appendChild(userBubble);
 
             const sentAttachment = currentAttachment;
-            
+
             userInput.value = '';
             userInput.style.height = 'auto';
+
             currentAttachment = null;
+
             attachmentPreview.style.display = 'none';
             attachmentPreview.textContent = '';
-            
+
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             statusBadge.textContent = "RÉFLEXION";
+
             const aiBubble = document.createElement('div');
+
             aiBubble.className = 'message ai-message';
             aiBubble.textContent = "Nexa analyse...";
+
             chatContainer.appendChild(aiBubble);
+
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await NexaBrain.think(text, sentAttachment);
+                const response =
+                    await NexaBrain.think(
+                        text,
+                        sentAttachment
+                    );
+
                 aiBubble.innerHTML = formatResponse(response);
+
             } catch (err) {
-                aiBubble.textContent = "Une erreur est survenue dans mon Brain.";
+                aiBubble.textContent =
+                    "Une erreur est survenue dans mon Brain.";
             }
 
             statusBadge.textContent = "ONLINE";
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            chatContainer.scrollTop =
+                chatContainer.scrollHeight;
         }
 
-        // Nettoyage et formatage propre du texte (convertit le Markdown ** en <b>)
+        // Nettoyage et formatage propre du texte
+        // Convertit le Markdown ** en <b>
         function formatResponse(text) {
             if (!text) return "";
+
             return text
-                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Transforme **texte** en gras propre
-                .replace(/\n/g, '<br>');                // Conserve les sauts de ligne
+                .replace(
+                    /\*\*(.*?)\*\*/g,
+                    '<b>$1</b>'
+                )
+                .replace(
+                    /\n/g,
+                    '<br>'
+                );
         }
 
-        sendBtn.addEventListener('click', handleSend);
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
+        sendBtn.addEventListener(
+            'click',
+            handleSend
+        );
+
+        userInput.addEventListener(
+            'keydown',
+            (e) => {
+                if (
+                    e.key === 'Enter' &&
+                    !e.shiftKey
+                ) {
+                    e.preventDefault();
+                    handleSend();
+                }
             }
-        });
+        );
     </script>
+
 </body>
 </html>
