@@ -1,7 +1,7 @@
-//============================================
-// NEXA BRAIN - version 0.8
+// ============================================
+// NEXA BRAIN - version 0.8 (Corrigé)
 // L'orchestrateur central : analyse l'intention
-// et déléguer aux Tools ou à l'IA.
+// et délégue aux Tools ou à l'IA.
 // ============================================
 
 const NexaBrain = {
@@ -65,12 +65,12 @@ const NexaBrain = {
       }
     }
 
-    // 9. Relais vers l'IA Cloud (OpenRouter) si disponible
-    if (typeof NexaAI !== "undefined" && NexaAI.ask) {
+    // 9. Relais vers l'IA Cloud (OpenRouter) corrigé
+    if (typeof NexaAI !== "undefined" && NexaAI.generateResponse) {
       try {
-        return await NexaAI.ask(rawText);
+        return await NexaAI.generateResponse(rawText, attachment);
       } catch (e) {
-        return "J'ai tenté de contacter mon modèle d'IA, mais une erreur est survenue.";
+        return `🚨 ERREUR BRAIN (IA) : ${e.message}`;
       }
     }
 
