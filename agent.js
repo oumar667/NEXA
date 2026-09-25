@@ -1,26 +1,31 @@
 // ============================================
-// NEXA AGENT - version 0.4
+// NEXA AGENT - version 0.5
 // Planner + Executor + Verifier + Finalizer
 //
 // Rôle actuel :
 // - créer un contexte d'exécution
 // - définir un objectif
 // - créer un plan
+// - détecter des localisations météo dynamiques
 // - stocker un plan
 // - suivre les étapes
 // - exécuter les Tools
+// - transmettre correctement les arguments aux Tools
 // - stocker les résultats
 // - vérifier les résultats
 // - construire une réponse finale
 // - gérer l'état de l'exécution
 //
 // IMPORTANT :
-// Cette version ajoute le Verifier + Finalizer.
-// Elle n'est pas encore connectée automatiquement
-// au Brain pour les exécutions multi-étapes.
+// Cette version :
+// - supprime la liste fixe de villes météo
+// - accepte des localisations dynamiques
+// - corrige le passage des arguments au Tool météo
+// - conserve l'architecture Planner + Executor
+//   + Verifier + Finalizer
 // ============================================
 const NexaAgent = {
-  version: "0.4",
+  version: "0.5",
   MAX_STEPS: 10,
   STATES: {
     IDLE: "idle",
@@ -82,21 +87,30 @@ const NexaAgent = {
     if (!text) {
       return [];
     }
-    const weatherCities = this.extractWeatherCities(text);
+    const weatherLocations =
+      this.extractWeatherLocations(text);
     // ------------------------------------------
     // Exemple :
     // "Compare la météo de Paris et Lyon"
+    //
+    // Devient :
+    // 1. météo Paris
+    // 2. météo Lyon
+    // 3. comparaison
+    //
+    // Les localisations ne sont plus limitées
+    // à une liste prédéfinie.
     // ------------------------------------------
-    if (weatherCities.length >= 2) {
+    if (weatherLocations.length >= 2) {
       const plan = [];
-      weatherCities
+      weatherLocations
         .slice(0, this.MAX_STEPS - 1)
-        .forEach((city, index) => {
+        .forEach((location, index) => {
           plan.push({
             id: "step-" + (index + 1),
-            action: "Obtenir la météo de " + city,
+            action: "Obtenir la météo de " + location,
             tool: "meteo",
-            argument: city
+            argument: location
           });
         });
       plan.push({
@@ -140,41 +154,64 @@ const NexaAgent = {
     ];
   },
   // --------------------------------------------
-  // Extrait les villes météo connues.
+  // Extrait dynamiquement les localisations
+  // météo depuis une demande utilisateur.
+  //
+  // Exemples acceptés :
+  //
+  // "Compare la météo de Paris et Lyon"
+  //
+  // "Compare la météo de Tokyo et New York"
+  //
+  // "Compare la météo de Dakar et Saint-Louis"
+  //
+  // "Compare la météo de Mulhouse, France
+  //  et Genève, Suisse"
+  //
+  // Aucune liste fixe de villes n'est utilisée.
   // --------------------------------------------
-  extractWeatherCities(text) {
-    const knownCities = [
-      "Paris",
-      "Lyon",
-      "Marseille",
-      "Toulouse",
-      "Nice",
-      "Nantes",
-      "Strasbourg",
-      "Montpellier",
-      "Bordeaux",
-      "Lille",
-      "Rennes",
-      "Grenoble",
-      "Saint-Louis",
-      "Mulhouse",
-      "Colmar",
-      "Nancy",
-      "Metz"
-    ];
-    const found = [];
-    knownCities.forEach(function (city) {
-      const pattern = new RegExp(
-        "\\b" +
-          city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-          "\\b",
-        "i"
-      );
-      if (pattern.test(text)) {
-        found.push(city);
-      }
-    });
-    return found;
+  extractWeatherLocations(text) {
+    const source = String(text || "").trim();
+    if (!source) {
+      return [];
+    }
+    const match = source.match(
+      /(?:météo|meteo|temps)\s+(?:de|du|d'|à|a|pour)\s+(.+?)(?:[?.!]|$)/i
+    );
+    if (!match || !match[1]) {
+      return [];
+    }
+    let locationsText = match[1].trim();
+    // Supprime certaines formulations naturelles
+    // qui peuvent suivre la liste.
+    locationsText = locationsText
+      .replace(
+        /\s+(?:aujourd'hui|aujourd’hui|demain|ce soir|maintenant)$/i,
+        ""
+      )
+      .trim();
+    if (!locationsText) {
+      return [];
+    }
+    // Le séparateur principal entre plusieurs
+    // localisations est "et".
+    //
+    // Exemple :
+    // "Paris et Lyon"
+    //
+    // ou :
+    // "Mulhouse, France et Genève, Suisse"
+    const locations = locationsText
+      .split(/\s+et\s+/i)
+      .map(function (location) {
+        return location
+          .replace(/^[,;:\s]+|[,;:\s]+$/g, "")
+          .trim();
+      })
+      .filter(function (location) {
+        return location.length > 0;
+      });
+    return locations;
   },
   // --------------------------------------------
   // Définit le plan.
@@ -393,6 +430,30 @@ const NexaAgent = {
   // EXECUTOR
   // ============================================
   // --------------------------------------------
+  // Prépare les arguments d'un Tool.
+  // --------------------------------------------
+  prepareToolArguments(step) {
+    if (!step || !step.tool) {
+      return step ? step.argument : null;
+    }
+    // Le Tool météo attend un objet contenant
+    // la localisation dans "city".
+    //
+    // Exemple :
+    // "Paris"
+    //
+    // devient :
+    // { city: "Paris" }
+    if (step.tool === "meteo") {
+      return {
+        city: String(step.argument || "").trim()
+      };
+    }
+    // Pour les autres Tools, on conserve
+    // l'argument existant.
+    return step.argument;
+  },
+  // --------------------------------------------
   // Exécute un outil NEXA.
   // --------------------------------------------
   async executeTool(step) {
@@ -412,9 +473,11 @@ const NexaAgent = {
       };
     }
     try {
+      const argumentsForTool =
+        this.prepareToolArguments(step);
       const result = await NexaTools.run(
         step.tool,
-        step.argument
+        argumentsForTool
       );
       if (!result || typeof result !== "object") {
         return {
@@ -464,7 +527,8 @@ const NexaAgent = {
         break;
       }
       step.status = "executing";
-      const result = await this.executeTool(step);
+      const result =
+        await this.executeTool(step);
       if (!result || result.ok === false) {
         this.failStep(
           context,
@@ -503,7 +567,9 @@ const NexaAgent = {
     if (result.ok === false) {
       return {
         ok: false,
-        error: result.error || "Le résultat indique une erreur."
+        error:
+          result.error ||
+          "Le résultat indique une erreur."
       };
     }
     if (
@@ -514,7 +580,8 @@ const NexaAgent = {
     ) {
       return {
         ok: false,
-        error: "Le résultat ne contient aucune donnée."
+        error:
+          "Le résultat ne contient aucune donnée."
       };
     }
     if (
@@ -524,7 +591,8 @@ const NexaAgent = {
     ) {
       return {
         ok: false,
-        error: "Le Tool a retourné une donnée vide."
+        error:
+          "Le Tool a retourné une donnée vide."
       };
     }
     return {
@@ -548,11 +616,12 @@ const NexaAgent = {
         error: "Les résultats Agent sont invalides."
       };
     }
-    const failedResults = context.results.filter(
-      function (entry) {
-        return entry.ok === false;
-      }
-    );
+    const failedResults =
+      context.results.filter(
+        function (entry) {
+          return entry.ok === false;
+        }
+      );
     if (failedResults.length > 0) {
       return {
         ok: false,
@@ -561,15 +630,17 @@ const NexaAgent = {
           "Une étape de l'exécution a échoué."
       };
     }
-    const completedSteps = context.plan.filter(
-      function (step) {
-        return step.status === "completed";
-      }
-    );
+    const completedSteps =
+      context.plan.filter(
+        function (step) {
+          return step.status === "completed";
+        }
+      );
     if (completedSteps.length === 0) {
       return {
         ok: false,
-        error: "Aucun résultat exploitable n'a été obtenu."
+        error:
+          "Aucun résultat exploitable n'a été obtenu."
       };
     }
     // Toutes les étapes possédant un Tool doivent
@@ -578,11 +649,12 @@ const NexaAgent = {
       if (!step.tool) {
         continue;
       }
-      const matchingResult = context.results.find(
-        function (entry) {
-          return entry.stepId === step.id;
-        }
-      );
+      const matchingResult =
+        context.results.find(
+          function (entry) {
+            return entry.stepId === step.id;
+          }
+        );
       const verification =
         this.verifyResult(matchingResult);
       if (!verification.ok) {
@@ -598,8 +670,10 @@ const NexaAgent = {
     }
     return {
       ok: true,
-      completedSteps: completedSteps.length,
-      totalResults: context.results.length
+      completedSteps:
+        completedSteps.length,
+      totalResults:
+        context.results.length
     };
   },
   // ============================================
@@ -638,12 +712,12 @@ const NexaAgent = {
   // --------------------------------------------
   // Construit une réponse finale à partir
   // des résultats réellement obtenus.
-  //
-  // Cette version ne prétend pas encore
-  // comprendre sémantiquement chaque Tool.
   // --------------------------------------------
   buildFinalAnswer(context) {
-    if (!context || !Array.isArray(context.results)) {
+    if (
+      !context ||
+      !Array.isArray(context.results)
+    ) {
       return null;
     }
     const successfulResults =
@@ -669,16 +743,19 @@ const NexaAgent = {
     // on les conserve tous dans l'ordre
     // d'exécution afin que la prochaine couche
     // puisse les interpréter.
-    const lines = successfulResults.map(
-      function (entry, index) {
-        return (
-          "Résultat " +
-          (index + 1) +
-          " : " +
-          this.formatResult(entry.result)
-        );
-      }.bind(this)
-    );
+    const lines =
+      successfulResults.map(
+        function (entry, index) {
+          return (
+            "Résultat " +
+            (index + 1) +
+            " : " +
+            this.formatResult(
+              entry.result
+            )
+          );
+        }.bind(this)
+      );
     return lines.join("\n\n");
   },
   // --------------------------------------------
@@ -692,7 +769,8 @@ const NexaAgent = {
     const verification =
       this.verifyExecution(context);
     if (!verification.ok) {
-      context.error = verification.error;
+      context.error =
+        verification.error;
       this.setState(
         context,
         this.STATES.FAILED
@@ -710,18 +788,14 @@ const NexaAgent = {
       );
       return context;
     }
-    context.finalAnswer = finalAnswer;
+    context.finalAnswer =
+      finalAnswer;
     // Le plan peut contenir une dernière étape
     // sans Tool, par exemple :
     // "Comparer les résultats météo obtenus".
     //
-    // Elle n'est pas marquée completed ici tant
-    // qu'une logique spécialisée n'existe pas.
-    //
-    // On considère donc cette version comme une
-    // validation des résultats exécutés, pas encore
-    // comme la résolution sémantique complète
-    // de la demande.
+    // Elle n'est pas encore marquée completed ici
+    // tant qu'une logique spécialisée n'existe pas.
     if (this.isPlanComplete(context)) {
       this.setState(
         context,
@@ -742,9 +816,11 @@ const NexaAgent = {
   // Prépare une exécution.
   // --------------------------------------------
   prepare(message, objective, plan) {
-    const context = this.createContext(message);
+    const context =
+      this.createContext(message);
     const agentObjective =
-      objective && String(objective).trim()
+      objective &&
+      String(objective).trim()
         ? String(objective).trim()
         : context.input;
     this.setObjective(
@@ -752,9 +828,12 @@ const NexaAgent = {
       agentObjective
     );
     const generatedPlan =
-      Array.isArray(plan) && plan.length > 0
+      Array.isArray(plan) &&
+      plan.length > 0
         ? plan
-        : this.createPlan(agentObjective);
+        : this.createPlan(
+            agentObjective
+          );
     this.setPlan(
       context,
       generatedPlan
@@ -762,12 +841,16 @@ const NexaAgent = {
     const validation =
       this.validateContext(context);
     if (!validation.ok) {
-      context.state = this.STATES.FAILED;
-      context.error = validation.error;
-      context.finishedAt = Date.now();
+      context.state =
+        this.STATES.FAILED;
+      context.error =
+        validation.error;
+      context.finishedAt =
+        Date.now();
       return context;
     }
-    context.state = this.STATES.PLANNING;
+    context.state =
+      this.STATES.PLANNING;
     return context;
   },
   // ============================================
@@ -778,19 +861,24 @@ const NexaAgent = {
   // Prepare → Execute → Verify → Finalize
   // --------------------------------------------
   async run(message, objective, plan) {
-    const context = this.prepare(
-      message,
-      objective,
-      plan
-    );
+    const context =
+      this.prepare(
+        message,
+        objective,
+        plan
+      );
     if (
-      context.state === this.STATES.FAILED
+      context.state ===
+      this.STATES.FAILED
     ) {
       return context;
     }
-    await this.executePlan(context);
+    await this.executePlan(
+      context
+    );
     if (
-      context.state === this.STATES.FAILED
+      context.state ===
+      this.STATES.FAILED
     ) {
       return context;
     }
@@ -802,7 +890,10 @@ const NexaAgent = {
   // Retourne une copie du contexte.
   // --------------------------------------------
   snapshot(context) {
-    if (!context || typeof context !== "object") {
+    if (
+      !context ||
+      typeof context !== "object"
+    ) {
       return null;
     }
     return JSON.parse(
