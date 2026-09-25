@@ -1,13 +1,13 @@
 // ============================================
-// NEXA AI - version 0.3
-// Le lien entre NEXA et le modèle IA (Mistral 7B)
+// NEXA AI - version 0.4
+// Le lien entre NEXA et le modèle IA (Routeur Free)
 // ============================================
 
 const NexaAI = {
-  version: "0.3",
+  version: "0.4",
   keyStorage: "NEXA_API_KEY",
   endpoint: "https://openrouter.ai/api/v1/chat/completions",
-  model: "mistralai/mistral-7b-instruct:free",
+  model: "openrouter/free",
 
   getKey() {
     try { return localStorage.getItem(this.keyStorage); }
