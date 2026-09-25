@@ -1,6 +1,6 @@
 // ============================================
-// NEXA AI - Version OpenRouter (IA Open-Source)
-// Optimisé pour la haute précision et vitesse
+// NEXA AI - Version OpenRouter (Llama 3.1)
+// Prompt analytique strict & correction comportement
 // ============================================
 
 const NexaAI = {
@@ -11,11 +11,14 @@ const NexaAI = {
         return "Erreur : Clé API OpenRouter manquante. Vérifiez la configuration.";
       }
 
-      const systemInstruction = `Tu es NEXA, un assistant virtuel personnel ultra-rapide, intelligent et d'une précision absolue. 
+      // Le Prompt Système est durci pour forcer la résolution de problèmes
+      const systemInstruction = `Tu es NEXA, une IA analytique avancée.
+Ton rôle est de RÉPONDRE aux questions, d'analyser et de RÉSOUDRE les problèmes (mathématiques, logiques, culturels) posés par l'utilisateur.
+
 Règles absolues :
-1. Ne donne jamais d'informations fausses ou incertaines. Fais des vérifications logiques strictes.
-2. Sois direct, concis et structuré. Pas de bavardage.
-3. Utilise un formatage propre en gras (**texte**) pour les points clés.
+1. Ne demande JAMAIS "Que souhaitez-vous faire avec cela ?". Donne directement la solution ou l'explication.
+2. Pour les problèmes de logique ou de maths, réfléchis étape par étape et donne la bonne réponse exacte.
+3. Sois direct, concis et utilise le gras (**texte**) pour mettre en évidence la réponse finale.
 ${systemContext}`;
 
       let userContent = userPrompt;
@@ -23,24 +26,21 @@ ${systemContext}`;
         userContent += `\n\nFichier attaché (${contextData.name}) :\n${contextData.content}`;
       }
 
-      // Appel à l'API OpenRouter
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://oumar667.github.io/NEXA/", // Recommandé par OpenRouter
+          "HTTP-Referer": "https://oumar667.github.io/NEXA/",
           "X-Title": "NEXA"
         },
         body: JSON.stringify({
-          // Modèle open-source gratuit, rapide et très performant.
-          // Tu peux le changer par "google/gemma-2-9b-it:free" ou autre modèle de ton choix.
           model: "meta-llama/llama-3.1-8b-instruct:free", 
           messages: [
             { role: "system", content: systemInstruction },
             { role: "user", content: userContent }
           ],
-          temperature: 0.2, // Rigueur maximale
+          temperature: 0.1, // Baissée à 0.1 pour être encore plus robotique et mathématique
           max_tokens: 1000
         })
       });
@@ -62,14 +62,12 @@ ${systemContext}`;
   },
 
   getApiKey() {
-    // Récupération de ta clé API depuis brain.js
     if (typeof NexaBrain !== "undefined" && NexaBrain.API_KEY) {
       return NexaBrain.API_KEY;
     }
     if (window.NEXA_API_KEY) {
       return window.NEXA_API_KEY;
     }
-    // Si tu préfères la coller directement ici, mets-la entre les guillemets ci-dessous :
     return ""; 
   }
 };
