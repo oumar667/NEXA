@@ -126,8 +126,27 @@
         .sidebar-content {
             flex: 1;
             overflow-y: auto;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .history-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.07);
         }
 
         .overlay {
@@ -327,14 +346,14 @@
     <!-- Overlay pour la sidebar -->
     <div id="overlay" class="overlay"></div>
 
-    <!-- Sidebar -->
+    <!-- Sidebar Historique -->
     <div id="sidebar">
         <div class="sidebar-header">
-            <span>Menu NEXA</span>
+            <span>Historique</span>
             <button class="icon-btn" id="close-sidebar">✕</button>
         </div>
-        <div class="sidebar-content">
-            <p>Historique et options bientôt disponibles ici.</p>
+        <div id="history-list" class="sidebar-content">
+            <!-- Les discussions passées s'afficheront ici -->
         </div>
     </div>
 
@@ -370,11 +389,11 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="memory.js?v=1.0"></script>
-    <script src="tools.js?v=1.0"></script>
-    <script src="ai.js?v=1.0"></script>
-    <script src="brain.js?v=1.0"></script>
+    <!-- Scripts avec versioning -->
+    <script src="memory.js?v=1.1"></script>
+    <script src="tools.js?v=1.1"></script>
+    <script src="ai.js?v=1.1"></script>
+    <script src="brain.js?v=1.1"></script>
 
     <script>
         // Logique globale du Chronomètre
@@ -407,7 +426,40 @@
             if (el) el.textContent = "00:00:00";
         }
 
-        // Gestion de la Sidebar et des boutons du Header
+        // Gestion de l'historique dans le localStorage
+        function getHistory() {
+            try {
+                return JSON.parse(localStorage.getItem('nexa_history')) || [];
+            } catch(e) { return []; }
+        }
+
+        function saveToHistory(text) {
+            if (!text) return;
+            let history = getHistory();
+            history.unshift(text);
+            if (history.length > 20) history.pop(); // Garde les 20 derniers
+            localStorage.setItem('nexa_history', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const historyList = document.getElementById('history-list');
+            const history = getHistory();
+            if (history.length === 0) {
+                historyList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; text-align:center; margin-top:20px;">Aucun historique</p>';
+                return;
+            }
+            historyList.innerHTML = history.map(item => `<div class="history-item" onclick="loadHistoryItem('${item.replace(/'/g, "\\'")}')">${item}</div>`).join('');
+        }
+
+        function loadHistoryItem(text) {
+            userInput.value = text;
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            userInput.focus();
+        }
+
+        // Gestion de la Sidebar et des boutons
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('overlay');
         const menuBtn = document.getElementById('menu-btn');
@@ -416,6 +468,7 @@
         const optionsBtn = document.getElementById('options-btn');
 
         menuBtn.addEventListener('click', () => {
+            renderHistory();
             sidebar.classList.add('open');
             overlay.classList.add('active');
         });
@@ -430,7 +483,6 @@
             overlay.classList.remove('active');
         });
 
-        // Bouton Nouveau Chat (réinitialise l'écran)
         newChatBtn.addEventListener('click', () => {
             chatContainer.innerHTML = `
                 <div class="welcome-screen">
@@ -443,7 +495,7 @@
         });
 
         optionsBtn.addEventListener('click', () => {
-            alert("NEXA v1.0 - Mode souverain local actif.");
+            alert("NEXA v1.1 - Mode souverain local actif.");
         });
 
         const chatContainer = document.getElementById('chat-container');
@@ -492,6 +544,9 @@
                 isFirstMessage = false;
             }
 
+            // Enregistrer dans l'historique local
+            if (text) saveToHistory(text);
+
             const userBubble = document.createElement('div');
             userBubble.className = 'message user-message';
             userBubble.textContent = text + (currentAttachment ? ` [📎 ${currentAttachment.name}]` : '');
@@ -525,9 +580,12 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        // Nettoyage et formatage propre du texte (convertit le Markdown ** en <b>)
         function formatResponse(text) {
             if (!text) return "";
-            return text.replace(/\n/g, '<br>');
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Transforme **texte** en gras propre
+                .replace(/\n/g, '<br>');                // Conserve les sauts de ligne
         }
 
         sendBtn.addEventListener('click', handleSend);
