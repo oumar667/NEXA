@@ -1,13 +1,14 @@
 // ============================================
-// NEXA BRAIN - version 1.2
+// NEXA BRAIN - version 1.1
 // Le cerveau de NEXA : il reçoit un message,
 // utilise la Memory, les Tools et le modèle IA.
-// Nouveauté : Intégration du Planner (NexaAgent)
-// pour exécuter des requêtes multi-étapes.
+// Nouveauté : quand aucune règle ne reconnaît la
+// phrase, le modèle IA choisit lui-même l'outil
+// à utiliser (météo, Wikipédia, calcul, ou chat).
 // ============================================
 
 const NexaBrain = {
-  version: "1.2",
+  version: "1.1",
 
   // Sert à se souvenir qu'on attend une réponse
   // (ex : "Pour quelle ville ?")
@@ -48,13 +49,7 @@ const NexaBrain = {
 
     // 2) Si aucune règle ne correspond, le modèle IA choisit l'outil
     if (reply === null) {
-      // NOUVEAU : On utilise le Planner multi-étapes s'il est disponible
-      if (typeof NexaAgent !== "undefined") {
-        reply = await NexaAgent.solve(text);
-      } else {
-        // Fallback sur l'ancien système si l'Agent n'est pas encore chargé
-        reply = await this.routeWithAI(text);
-      }
+      reply = await this.routeWithAI(text);
     }
 
     if (typeof NexaMemory !== "undefined") {
@@ -274,8 +269,10 @@ const NexaBrain = {
   },
 
   // --------------------------------------------
-  // Fonction conservée comme Fallback au cas où l'Agent
-  // échoue ou n'est pas encore totalement connecté.
+  // NOUVEAU : le modèle IA choisit l'outil à utiliser
+  // quand aucune règle du Brain ne reconnaît la phrase.
+  // Un seul appel IA : soit il renvoie un outil + un
+  // argument, soit il répond directement (chat).
   // --------------------------------------------
   async routeWithAI(text) {
     if (typeof NexaAI === "undefined") {
