@@ -21,7 +21,7 @@ const NexaAI = {
                     "X-Title": "NEXA"
                 },
                 body: JSON.stringify({
-                    model: "google/gemma-2-9b-it:free",
+                    model: "mistralai/mistral-7b-instruct:free",
                     messages: messages
                 })
             });
