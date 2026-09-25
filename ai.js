@@ -1,16 +1,13 @@
 // ============================================
-// NEXA AI - version 0.2
-// Le lien entre NEXA et le modèle IA.
-// Prise en charge des requêtes Vision (images)
+// NEXA AI - version 0.3
+// Le lien entre NEXA et le modèle IA (Mistral 7B)
 // ============================================
 
 const NexaAI = {
-  version: "0.2",
-  keyStorage: "nexa_openrouter_key",
+  version: "0.3",
+  keyStorage: "NEXA_API_KEY",
   endpoint: "https://openrouter.ai/api/v1/chat/completions",
-
-  // Modèle gratuit : OpenRouter choisit lui-même
-  model: "openrouter/free",
+  model: "mistralai/mistral-7b-instruct:free",
 
   getKey() {
     try { return localStorage.getItem(this.keyStorage); }
@@ -24,38 +21,32 @@ const NexaAI = {
     } catch (e) { return false; }
   },
 
-  clearKey() {
-    try { localStorage.removeItem(this.keyStorage); }
-    catch (e) {}
-  },
+  async ask(userText) {
+    const key = this.getKey();
+    if (!key) return "🚨 ERREUR : Clé API manquante. Configure-la via le bouton ⋯ en haut à droite.";
 
-  ensureKey() {
-    const existing = this.getKey();
-    if (existing) return existing;
-    
-    const entered = window.prompt("Collez votre clé OpenRouter. Elle reste enregistrée uniquement sur cet appareil.");
-    if (entered && entered.trim()) {
-      const key = entered.trim();
-      this.setKey(key);
-      return key;
-    }
-    return null;
-  },
+    const messages = [
+      {
+        role: "system",
+        content: "Tu es NEXA, un assistant IA intelligent, direct et utile."
+      },
+      {
+        role: "user",
+        content: userText
+      }
+    ];
 
-  async ask(messages) {
-    const key = this.ensureKey();
-    if (!key) return "Je n'ai pas de clé OpenRouter, donc je ne peux pas utiliser l'IA pour l'instant.";
-
-    // Sécurité : On passe à 60 secondes car l'analyse d'une image prend plus de temps
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
+    const timer = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(this.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + key
+          "Authorization": "Bearer " + key,
+          "HTTP-Referer": "https://oumar667.github.io/NEXA/",
+          "X-Title": "NEXA"
         },
         body: JSON.stringify({
           model: this.model,
@@ -68,24 +59,16 @@ const NexaAI = {
       try { data = await response.json(); } catch (e) {}
 
       if (!response.ok) {
-        const detail = data && data.error && data.error.message ? " Détail : " + data.error.message : "";
-        
-        if (response.status === 401) {
-          this.clearKey();
-          return "OpenRouter a refusé la clé. Je l'ai effacée : envoyez un nouveau message pour la redemander." + detail;
-        }
-        if (response.status === 429) {
-          return "Limite gratuite atteinte. Réessayez dans une minute." + detail;
-        }
-        return "Erreur du service IA (code " + response.status + ")." + detail;
+        const errDetail = data && data.error && data.error.message ? data.error.message : response.statusText;
+        return `🚨 ERREUR RÉSEAU (${response.status}) : ${errDetail}`;
       }
 
       const content = data?.choices?.[0]?.message?.content;
-      return (content && content.trim()) ? content.trim() : "Le modèle n'a pas renvoyé de réponse.";
+      return (content && content.trim()) ? content.trim() : "L'IA n'a renvoyé aucune réponse.";
 
     } catch (e) {
-      if (e.name === "AbortError") return "L'IA a mis trop de temps à analyser la demande. Réessayez.";
-      return "Impossible de joindre le modèle IA. Vérifiez votre connexion.";
+      if (e.name === "AbortError") return "🚨 L'IA a mis trop de temps à répondre.";
+      return `🚨 ERREUR SYSTÈME : ${e.message}`;
     } finally {
       clearTimeout(timer);
     }
