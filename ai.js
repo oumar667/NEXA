@@ -1,5 +1,6 @@
 // ============================================
-// NEXA AI - Version Corrigée & Sécurisée
+// NEXA AI - Version OpenRouter (IA Open-Source)
+// Optimisé pour la haute précision et vitesse
 // ============================================
 
 const NexaAI = {
@@ -7,7 +8,7 @@ const NexaAI = {
     try {
       const apiKey = NexaAI.getApiKey();
       if (!apiKey) {
-        return "Erreur : Clé API manquante. Veuillez vérifier sa configuration dans votre code.";
+        return "Erreur : Clé API OpenRouter manquante. Vérifiez la configuration.";
       }
 
       const systemInstruction = `Tu es NEXA, un assistant virtuel personnel ultra-rapide, intelligent et d'une précision absolue. 
@@ -17,36 +18,40 @@ Règles absolues :
 3. Utilise un formatage propre en gras (**texte**) pour les points clés.
 ${systemContext}`;
 
-      let fullPrompt = `${systemInstruction}\n\nRequête : ${userPrompt}`;
+      let userContent = userPrompt;
       if (contextData) {
-        fullPrompt += `\n\nFichier attaché (${contextData.name}) :\n${contextData.content}`;
+        userContent += `\n\nFichier attaché (${contextData.name}) :\n${contextData.content}`;
       }
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      // Appel à l'API OpenRouter
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://oumar667.github.io/NEXA/", // Recommandé par OpenRouter
+          "X-Title": "NEXA"
+        },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: fullPrompt }
-              ]
-            }
+          // Modèle open-source gratuit, rapide et très performant.
+          // Tu peux le changer par "google/gemma-2-9b-it:free" ou autre modèle de ton choix.
+          model: "meta-llama/llama-3.1-8b-instruct:free", 
+          messages: [
+            { role: "system", content: systemInstruction },
+            { role: "user", content: userContent }
           ],
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 1000
-          }
+          temperature: 0.2, // Rigueur maximale
+          max_tokens: 1000
         })
       });
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error?.message || "Erreur API Gemini");
+        throw new Error(errData.error?.message || "Erreur de communication avec OpenRouter");
       }
 
       const data = await response.json();
-      const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const textResponse = data.choices?.[0]?.message?.content;
 
       return textResponse || "Réponse vide reçue de l'IA.";
 
@@ -57,13 +62,14 @@ ${systemContext}`;
   },
 
   getApiKey() {
-    // Récupération de la clé depuis brain.js ou variable globale
+    // Récupération de ta clé API depuis brain.js
     if (typeof NexaBrain !== "undefined" && NexaBrain.API_KEY) {
       return NexaBrain.API_KEY;
     }
     if (window.NEXA_API_KEY) {
       return window.NEXA_API_KEY;
     }
-    return "";
+    // Si tu préfères la coller directement ici, mets-la entre les guillemets ci-dessous :
+    return ""; 
   }
 };
