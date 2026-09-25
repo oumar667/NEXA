@@ -343,17 +343,14 @@
 </head>
 <body>
 
-    <!-- Overlay pour la sidebar -->
     <div id="overlay" class="overlay"></div>
 
-    <!-- Sidebar Historique -->
     <div id="sidebar">
         <div class="sidebar-header">
             <span>Historique</span>
             <button class="icon-btn" id="close-sidebar">✕</button>
         </div>
         <div id="history-list" class="sidebar-content">
-            <!-- Les discussions passées s'afficheront ici -->
         </div>
     </div>
 
@@ -389,14 +386,13 @@
         </div>
     </div>
 
-    <!-- Scripts avec versioning -->
-    <script src="memory.js?v=1.1"></script>
-    <script src="tools.js?v=1.1"></script>
-    <script src="ai.js?v=1.1"></script>
-    <script src="brain.js?v=1.1"></script>
+    <!-- Forçage de la mise à jour (v=2.1) -->
+    <script src="memory.js?v=2.1"></script>
+    <script src="tools.js?v=2.1"></script>
+    <script src="ai.js?v=2.1"></script>
+    <script src="brain.js?v=2.1"></script>
 
     <script>
-        // Logique globale du Chronomètre
         if (!window.chronoTimers) window.chronoTimers = {};
         
         function startChrono(id) {
@@ -426,7 +422,6 @@
             if (el) el.textContent = "00:00:00";
         }
 
-        // Gestion de l'historique dans le localStorage
         function getHistory() {
             try {
                 return JSON.parse(localStorage.getItem('nexa_history')) || [];
@@ -437,7 +432,7 @@
             if (!text) return;
             let history = getHistory();
             history.unshift(text);
-            if (history.length > 20) history.pop(); // Garde les 20 derniers
+            if (history.length > 20) history.pop();
             localStorage.setItem('nexa_history', JSON.stringify(history));
             renderHistory();
         }
@@ -459,7 +454,6 @@
             userInput.focus();
         }
 
-        // Gestion de la Sidebar et des boutons
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('overlay');
         const menuBtn = document.getElementById('menu-btn');
@@ -494,8 +488,15 @@
             isFirstMessage = true;
         });
 
+        // 🔒 Sécurité : Gestion de la clé API via l'interface
         optionsBtn.addEventListener('click', () => {
-            alert("NEXA v1.1 - Mode souverain local actif.");
+            const currentKey = localStorage.getItem('NEXA_API_KEY') || "";
+            const newKey = prompt("🔒 Sécurité NEXA\nEntrez votre clé API OpenRouter (elle sera stockée de manière sécurisée uniquement sur ce téléphone) :", currentKey);
+            
+            if (newKey !== null) {
+                localStorage.setItem('NEXA_API_KEY', newKey.trim());
+                alert("Clé sauvegardée localement avec succès !");
+            }
         });
 
         const chatContainer = document.getElementById('chat-container');
@@ -544,7 +545,6 @@
                 isFirstMessage = false;
             }
 
-            // Enregistrer dans l'historique local
             if (text) saveToHistory(text);
 
             const userBubble = document.createElement('div');
@@ -573,19 +573,19 @@
                 const response = await NexaBrain.think(text, sentAttachment);
                 aiBubble.innerHTML = formatResponse(response);
             } catch (err) {
-                aiBubble.textContent = "Une erreur est survenue dans mon Brain.";
+                aiBubble.textContent = "Une erreur est survenue dans mon système.";
+                console.error(err);
             }
 
             statusBadge.textContent = "ONLINE";
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        // Nettoyage et formatage propre du texte (convertit le Markdown ** en <b>)
         function formatResponse(text) {
             if (!text) return "";
             return text
-                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Transforme **texte** en gras propre
-                .replace(/\n/g, '<br>');                // Conserve les sauts de ligne
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/\n/g, '<br>');
         }
 
         sendBtn.addEventListener('click', handleSend);
