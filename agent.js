@@ -1,10 +1,11 @@
 // ============================================
-// NEXA AGENT - version 0.1
+// NEXA AGENT - version 0.2
 // Socle du futur Agent autonome de NEXA.
 //
 // Rôle actuel :
 // - créer un contexte d'exécution
 // - définir un objectif
+// - créer un plan
 // - stocker un plan
 // - suivre les étapes
 // - stocker les résultats
@@ -16,10 +17,10 @@
 // ============================================
 
 const NexaAgent = {
-  version: "0.1",
+  version: "0.2",
 
   // Nombre maximum d'étapes autorisées pour une exécution.
-  // Cette limite protégera NEXA contre les boucles infinies.
+  // Cette limite protège NEXA contre les boucles infinies.
   MAX_STEPS: 10,
 
   // États possibles d'une exécution.
@@ -86,6 +87,138 @@ const NexaAgent = {
     context.objective = text;
 
     return context;
+  },
+
+  // --------------------------------------------
+  // Crée un premier plan local à partir d'un objectif.
+  //
+  // Cette version constitue le premier Planner de NEXA.
+  //
+  // Elle ne contacte pas encore l'IA.
+  // Elle sert de base sûre avant l'ajout du Planner IA.
+  // --------------------------------------------
+  createPlan(objective) {
+    const text = String(objective || "").trim();
+
+    if (!text) {
+      return [];
+    }
+
+    const normalized = text.toLowerCase();
+
+    // ------------------------------------------
+    // Comparaison de plusieurs villes.
+    // Exemple :
+    // "Compare la météo de Paris et Lyon"
+    // ------------------------------------------
+    const weatherCities = this.extractWeatherCities(text);
+
+    if (weatherCities.length >= 2) {
+      const plan = [];
+
+      weatherCities.slice(0, this.MAX_STEPS - 1).forEach((city, index) => {
+        plan.push({
+          id: "step-" + (index + 1),
+          action: "Obtenir la météo de " + city,
+          tool: "meteo",
+          argument: city
+        });
+      });
+
+      plan.push({
+        id: "step-" + (plan.length + 1),
+        action: "Comparer les résultats météo obtenus",
+        tool: null,
+        argument: null
+      });
+
+      return plan.slice(0, this.MAX_STEPS);
+    }
+
+    // ------------------------------------------
+    // Demande contenant plusieurs actions explicites.
+    // ------------------------------------------
+    const actionSeparators = /\s+(?:puis|ensuite|et ensuite|après|ensuite il faut)\s+/i;
+    const parts = text
+      .split(actionSeparators)
+      .map(function (part) {
+        return part.trim();
+      })
+      .filter(Boolean);
+
+    if (parts.length >= 2) {
+      return parts
+        .slice(0, this.MAX_STEPS)
+        .map(function (part, index) {
+          return {
+            id: "step-" + (index + 1),
+            action: part,
+            tool: null,
+            argument: null
+          };
+        });
+    }
+
+    // ------------------------------------------
+    // Aucun découpage local évident.
+    //
+    // On crée malgré tout une étape unique.
+    // Le futur Planner IA pourra ensuite remplacer
+    // cette stratégie par un plan plus intelligent.
+    // ------------------------------------------
+    return [
+      {
+        id: "step-1",
+        action: text,
+        tool: null,
+        argument: null
+      }
+    ];
+  },
+
+  // --------------------------------------------
+  // Extrait les villes présentes dans une demande
+  // météo simple.
+  //
+  // Cette fonction reste volontairement prudente :
+  // elle ne prétend pas comprendre toutes les villes
+  // du monde.
+  // --------------------------------------------
+  extractWeatherCities(text) {
+    const knownCities = [
+      "Paris",
+      "Lyon",
+      "Marseille",
+      "Toulouse",
+      "Nice",
+      "Nantes",
+      "Strasbourg",
+      "Montpellier",
+      "Bordeaux",
+      "Lille",
+      "Rennes",
+      "Grenoble",
+      "Saint-Louis",
+      "Mulhouse",
+      "Colmar",
+      "Nancy",
+      "Metz"
+    ];
+
+    const found = [];
+
+    knownCities.forEach(function (city) {
+      const pattern = new RegExp(
+        "\\b" + city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b",
+        "i"
+      );
+
+      if (pattern.test(text)) {
+        found.push(city);
+      }
+    });
+
+    return found;
   },
 
   // --------------------------------------------
@@ -202,9 +335,11 @@ const NexaAgent = {
     const entry = {
       stepId: stepId || null,
       ok: result && result.ok !== false,
-      result: result && Object.prototype.hasOwnProperty.call(result, "result")
-        ? result.result
-        : result,
+      result:
+        result &&
+        Object.prototype.hasOwnProperty.call(result, "result")
+          ? result.result
+          : result,
       error: result && result.error ? result.error : null,
       timestamp: Date.now()
     };
@@ -352,14 +487,20 @@ const NexaAgent = {
   // --------------------------------------------
   // Prépare une exécution Agent.
   //
-  // Cette fonction ne contacte encore ni l'IA
-  // ni les Tools.
+  // Si aucun plan n'est fourni, le Planner local
+  // crée automatiquement un premier plan.
   // --------------------------------------------
   prepare(message, objective, plan) {
     const context = this.createContext(message);
 
     this.setObjective(context, objective);
-    this.setPlan(context, plan);
+
+    const generatedPlan =
+      Array.isArray(plan) && plan.length > 0
+        ? plan
+        : this.createPlan(objective);
+
+    this.setPlan(context, generatedPlan);
 
     const validation = this.validateContext(context);
 
@@ -367,6 +508,7 @@ const NexaAgent = {
       context.state = this.STATES.FAILED;
       context.error = validation.error;
       context.finishedAt = Date.now();
+
       return context;
     }
 
@@ -390,5 +532,5 @@ const NexaAgent = {
 console.log(
   "NexaAgent v" +
   NexaAgent.version +
-  " chargé. Socle Agent prêt."
+  " chargé. Planner local prêt."
 );
