@@ -1,21 +1,20 @@
 // ============================================
-// NEXA BRAIN - version 1.0
-// Le cerveau de NEXA : il reçoit un message
-// (et éventuellement un fichier joint), utilise
-// la Memory, les Tools (via le registre) et le
-// modèle IA, et décide quoi répondre.
-// Nouveauté : chronomètre, fichiers joints.
+// NEXA BRAIN - version 1.1
+// Le cerveau de NEXA : il reçoit un message,
+// utilise la Memory, les Tools et le modèle IA.
+// Nouveauté : quand aucune règle ne reconnaît la
+// phrase, le modèle IA choisit lui-même l'outil
+// à utiliser (météo, Wikipédia, calcul, ou chat).
 // ============================================
 
 const NexaBrain = {
-  version: "1.0",
+  version: "1.1",
 
   // Sert à se souvenir qu'on attend une réponse
   // (ex : "Pour quelle ville ?")
   pending: null,
 
   // Pays reconnus à la fin d'un nom de ville
-  // (sans accents, en minuscules)
   countries: [
     "france", "belgique", "suisse", "canada", "luxembourg", "maroc",
     "algerie", "tunisie", "senegal", "mali", "cameroun", "gabon",
@@ -26,11 +25,10 @@ const NexaBrain = {
   ],
 
   // Fonction principale : reçoit le texte de l'utilisateur,
-  // et éventuellement un fichier joint ({name, type, content}).
+  // et éventuellement un fichier joint.
   async think(message, attachment) {
     const text = (message || "").trim();
 
-    // Un fichier a été joint : simple accusé de réception pour l'instant
     if (attachment) {
       const ack =
         "J'ai bien reçu votre fichier « " + attachment.name + " ». " +
@@ -49,12 +47,11 @@ const NexaBrain = {
     // 1) Les règles du Brain (prénom, notes, outils...)
     let reply = await this.decide(text);
 
-    // 2) Si aucune règle ne correspond, on demande au modèle IA
+    // 2) Si aucune règle ne correspond, le modèle IA choisit l'outil
     if (reply === null) {
-      reply = await this.askAI(text);
+      reply = await this.routeWithAI(text);
     }
 
-    // On garde une trace de la conversation dans la Memory
     if (typeof NexaMemory !== "undefined") {
       NexaMemory.addToHistory("user", text);
       NexaMemory.addToHistory("nexa", reply);
@@ -63,8 +60,6 @@ const NexaBrain = {
     return reply;
   },
 
-  // Utilise un outil du registre.
-  // Renvoie toujours { ok: true/false, result / error }
   async useTool(name, args) {
     if (typeof NexaTools === "undefined" || typeof NexaTools.run !== "function") {
       return { ok: false, error: "Mes outils ne sont pas encore connectés." };
@@ -72,7 +67,6 @@ const NexaBrain = {
     return await NexaTools.run(name, args);
   },
 
-  // Renvoie la liste des notes enregistrées
   getNotes() {
     if (typeof NexaMemory === "undefined") return [];
     const facts = NexaMemory.load().facts;
@@ -85,7 +79,6 @@ const NexaBrain = {
     return notes;
   },
 
-  // Texte de l'aide : la liste des commandes
   helpText() {
     return (
       "Voici ce que je sais faire :\n" +
@@ -101,12 +94,10 @@ const NexaBrain = {
       "- Fichier : touchez le bouton + pour en joindre un\n" +
       "- Clé IA : « Change ma clé » ou « Supprime ma clé »\n" +
       "- Conversation : « Efface la conversation »\n" +
-      "- Tout le reste : je le confie au modèle IA."
+      "- Question naturelle : posez-la simplement (ex : « où joue Cherki ? »), je choisirai moi-même l'outil adapté."
     );
   },
 
-  // "Saint-Louis France" devient "Saint-Louis, France"
-  // (si le dernier mot est un pays connu)
   formatPlace(str) {
     const text = (str || "").trim();
     if (!text) return text;
@@ -128,7 +119,6 @@ const NexaBrain = {
     return text;
   },
 
-  // Nettoie un texte pour ne garder que le nom de la ville
   cleanCity(str) {
     const stopStart = [
       "fait-il", "fait", "il", "est-il", "à", "a", "de", "du", "des",
@@ -160,7 +150,6 @@ const NexaBrain = {
     return words.join(" ").trim();
   },
 
-  // Trouve la ville dans une phrase sur la météo
   extractCity(clean) {
     const match = clean.match(
       /(?:il fait quel temps|quel temps|m[ée]t[ée]o(?![a-zà-ÿ])|temp[ée]rature)(.*)$/i
@@ -169,7 +158,6 @@ const NexaBrain = {
     return this.cleanCity(match[1]);
   },
 
-  // Nettoie un texte pour ne garder que le sujet d'une recherche
   cleanTopic(str) {
     const stopStart = [
       "cherche", "chercher", "recherche", "rechercher", "trouve", "trouver",
@@ -204,12 +192,10 @@ const NexaBrain = {
     return words.join(" ").trim();
   },
 
-  // Trouve le sujet dans une phrase qui parle de Wikipédia
   extractWikiQuery(clean) {
     return this.cleanTopic(clean.replace(/wikip[ée]dia/gi, " "));
   },
 
-  // Demande la météo à l'outil et renvoie la phrase
   async weatherReply(city) {
     const place = this.formatPlace(city);
     const r = await this.useTool("meteo", { city: place });
@@ -217,22 +203,18 @@ const NexaBrain = {
     return r.result;
   },
 
-  // Demande un résumé à l'outil Wikipédia
   async wikiReply(topic) {
     const r = await this.useTool("wikipedia", { query: topic });
     if (!r.ok) return r.error;
     return r.result;
   },
 
-  // Appelle l'outil de tâches et renvoie la phrase
   async taskCall(args) {
     const r = await this.useTool("taches", args);
     if (!r.ok) return r.error;
     return r.result;
   },
 
-  // Reconnaît les commandes de la liste de tâches.
-  // Renvoie une réponse, ou null si ce n'est pas une commande de tâches.
   async handleTasks(clean) {
 
     if (
@@ -286,8 +268,13 @@ const NexaBrain = {
     return null;
   },
 
-  // Envoie la question au modèle IA, avec du contexte
-  async askAI(text) {
+  // --------------------------------------------
+  // NOUVEAU : le modèle IA choisit l'outil à utiliser
+  // quand aucune règle du Brain ne reconnaît la phrase.
+  // Un seul appel IA : soit il renvoie un outil + un
+  // argument, soit il répond directement (chat).
+  // --------------------------------------------
+  async routeWithAI(text) {
     if (typeof NexaAI === "undefined") {
       return (
         "Mon Brain a bien reçu : « " + text + " ». " +
@@ -298,19 +285,20 @@ const NexaBrain = {
     const hasMemory = typeof NexaMemory !== "undefined";
 
     let system =
-      "Tu es NEXA, l'assistant personnel de l'utilisateur. " +
-      "Tu réponds toujours en français, de façon claire, simple et courte, " +
-      "car l'écran est celui d'un iPhone. " +
-      "Si tu ne sais pas, tu le dis honnêtement. " +
-      "Tu n'as pas accès à Internet et tu ne connais pas l'heure exacte. " +
-      "Tu ne peux rien enregistrer toi-même : si l'utilisateur veut que tu " +
-      "retiennes quelque chose, dis-lui d'écrire « Retiens que ... ». " +
-      "Pour la météo, dis-lui d'écrire « Météo à Paris » (avec sa ville). " +
-      "Pour une recherche, dis-lui d'écrire « Cherche sur Wikipédia ... ». " +
-      "Pour une liste de tâches, dis-lui d'écrire « Ajoute une tâche : ... » ou « Mes tâches ». " +
-      "Pour un chronomètre, dis-lui d'écrire « Chrono ». " +
-      "S'il demande ce que tu sais faire, dis-lui d'écrire « Aide ». " +
-      "Tu n'utilises jamais de Markdown : pas d'astérisques, pas de titres.";
+      "Tu es NEXA, l'assistant personnel de l'utilisateur, et aussi son routeur d'intentions. " +
+      "Pour CHAQUE message reçu, réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, sans balises de code, au format exact : " +
+      '{"tool": "...", "argument": "...", "reply": "..."} ' +
+      "Le champ tool doit être une de ces valeurs exactes : " +
+      '"meteo" si l\'utilisateur veut la météo d\'un lieu (mets le nom de la ville dans argument, laisse reply vide) ; ' +
+      '"wikipedia" si l\'utilisateur pose une question factuelle sur une personne, un lieu, une chose ou un évènement, y compris une question courte comme « où joue X » ou « qui est X » (mets le sujet en quelques mots dans argument, laisse reply vide) ; ' +
+      '"calcul" pour un calcul mathématique (mets l\'expression dans argument, laisse reply vide) ; ' +
+      '"chat" pour tout le reste, comme une discussion, une salutation, une opinion, une blague ou une explication que tu connais déjà (laisse argument vide et écris ta réponse complète en français dans reply). ' +
+      "Dans reply, réponds toujours en français, de façon claire, simple et courte, car l'écran est celui d'un iPhone, sans Markdown (pas d'astérisques ni de titres). " +
+      "Si tu ne sais pas, dis-le honnêtement dans reply plutôt que d'inventer. Tu n'as pas accès à Internet toi-même et tu ne connais pas l'heure exacte. " +
+      "Tu ne peux rien enregistrer toi-même : si l'utilisateur veut que tu retiennes quelque chose, dans reply dis-lui d'écrire « Retiens que ... ». " +
+      "Pour une liste de tâches, dans reply dis-lui d'écrire « Ajoute une tâche : ... » ou « Mes tâches ». " +
+      "Pour un chronomètre, dans reply dis-lui d'écrire « Chrono ». " +
+      "S'il demande ce que tu sais faire, dans reply dis-lui d'écrire « Aide ».";
 
     const name = hasMemory ? NexaMemory.recall("prenom") : null;
     if (name) {
@@ -350,7 +338,77 @@ const NexaBrain = {
 
     messages.push({ role: "user", content: text });
 
-    return await NexaAI.ask(messages);
+    const raw = await NexaAI.ask(messages);
+    const decision = this.parseRouterJSON(raw);
+
+    // Le modèle n'a pas renvoyé de JSON exploitable : on utilise
+    // sa réponse telle quelle, comme une conversation normale.
+    if (!decision) {
+      return raw;
+    }
+
+    if (decision.tool === "meteo") {
+      const city = (decision.argument || "").trim() || (hasMemory ? NexaMemory.recall("ville") : "") || "";
+      if (!city) {
+        this.pending = "meteo";
+        return "Pour quelle ville ? Vous pouvez aussi me dire « J'habite à ... » pour que je m'en souvienne.";
+      }
+      return await this.weatherReply(city);
+    }
+
+    if (decision.tool === "wikipedia") {
+      const topic = (decision.argument || "").trim();
+      if (!topic) {
+        this.pending = "wikipedia";
+        return "Que voulez-vous que je cherche sur Wikipédia ?";
+      }
+      return await this.wikiReply(topic);
+    }
+
+    if (decision.tool === "calcul") {
+      const expr = (decision.argument || "").trim();
+      if (!expr) {
+        return "Quel calcul voulez-vous faire ?";
+      }
+      const r = await this.useTool("calcul", { expression: expr });
+      if (!r.ok) return r.error;
+      if (r.result !== null) {
+        return "Le résultat est " + String(r.result).replace(".", ",") + ".";
+      }
+      return "Je n'ai pas réussi à faire ce calcul.";
+    }
+
+    // tool === "chat", ou une valeur inconnue : on utilise "reply"
+    const reply = (decision.reply || "").trim();
+    return reply || raw || "Je n'ai pas de réponse à vous donner pour l'instant.";
+  },
+
+  // Essaie de lire un JSON renvoyé par le modèle, même si le
+  // modèle a ajouté du texte ou des balises ```json autour.
+  parseRouterJSON(raw) {
+    if (!raw) return null;
+    let text = raw.trim();
+
+    text = text
+      .replace(/^```json/i, "")
+      .replace(/^```/, "")
+      .replace(/```$/, "")
+      .trim();
+
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1 || end < start) return null;
+    text = text.slice(start, end + 1);
+
+    try {
+      const data = JSON.parse(text);
+      if (data && typeof data === "object" && typeof data.tool === "string") {
+        return data;
+      }
+    } catch (e) {
+      // JSON invalide, on laisse tomber
+    }
+    return null;
   },
 
   // Décide de la réponse selon le message.
@@ -426,7 +484,7 @@ const NexaBrain = {
       }
     }
 
-    // --- Effacer la conversation (garde prénom, ville, notes, tâches) ---
+    // --- Effacer la conversation ---
     if (
       /(efface|supprime|vide|nettoie|oublie|r[ée]initialise)\s+(?:toute\s+|tout\s+)?(?:la\s+|notre\s+|cette\s+|l')\s*(?:conversation|historique)/i.test(lower)
     ) {
@@ -595,7 +653,7 @@ const NexaBrain = {
       return "Enchanté " + name + ". Je m'en souviendrai.";
     }
 
-    // --- Tool : Wikipédia ---
+    // --- Tool : Wikipédia (formulation explicite) ---
     if (/wikip[ée]dia/i.test(clean)) {
       const topic = this.extractWikiQuery(clean);
       if (!topic) {
@@ -605,7 +663,7 @@ const NexaBrain = {
       return await this.wikiReply(topic);
     }
 
-    // --- Tool : la météo ---
+    // --- Tool : la météo (formulation explicite) ---
     const asksWeather =
       /m[ée]t[ée]o(?![a-zà-ÿ])|quel temps|quelle temp[ée]rature fait/i.test(clean);
 
@@ -646,7 +704,7 @@ const NexaBrain = {
       return "Nous sommes le " + r.result + ".";
     }
 
-    // --- Tool : les calculs ---
+    // --- Tool : les calculs (formulation explicite) ---
     const calcMatch = clean.match(
       /(?:calcule|calcul|combien font|combien fait|combien vaut)\s*:?\s*(.+)/i
     );
@@ -692,7 +750,7 @@ const NexaBrain = {
       return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
     }
 
-    // --- Aucune règle ne correspond : on laisse le modèle IA répondre ---
+    // --- Aucune règle ne correspond : le modèle IA choisira l'outil ---
     return null;
   }
 };
