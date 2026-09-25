@@ -1,19 +1,14 @@
 // ============================================
-// NEXA BRAIN - version 1.1
+// NEXA BRAIN - version 1.2
 // Le cerveau de NEXA : il reçoit un message,
-// utilise la Memory, les Tools et le modèle IA.
-// Nouveauté : quand aucune règle ne reconnaît la
-// phrase, le modèle IA choisit lui-même l'outil
-// à utiliser (météo, Wikipédia, calcul, ou chat).
+// utilise la Memory, les Tools, le modèle IA
+// et maintenant le Agent/Planner.
 // ============================================
-
 const NexaBrain = {
-  version: "1.1",
-
+  version: "1.2",
   // Sert à se souvenir qu'on attend une réponse
   // (ex : "Pour quelle ville ?")
   pending: null,
-
   // Pays reconnus à la fin d'un nom de ville
   countries: [
     "france", "belgique", "suisse", "canada", "luxembourg", "maroc",
@@ -23,62 +18,97 @@ const NexaBrain = {
     "egypte", "turquie", "espagne", "italie", "allemagne", "portugal",
     "angleterre", "royaume-uni", "etats-unis", "usa"
   ],
-
   // Fonction principale : reçoit le texte de l'utilisateur,
   // et éventuellement un fichier joint.
   async think(message, attachment) {
     const text = (message || "").trim();
-
+    // ============================================
+    // NOUVEAU : connexion au Agent / Planner
+    // Les demandes multi-étapes sont maintenant
+    // préparées par NexaAgent.
+    // Les demandes simples continuent d'utiliser
+    // le Brain existant.
+    // ============================================
+    if (
+      !attachment &&
+      typeof NexaAgent !== "undefined" &&
+      typeof NexaAgent.prepare === "function"
+    ) {
+      const agentContext = NexaAgent.prepare(text);
+      if (
+        agentContext &&
+        Array.isArray(agentContext.plan) &&
+        agentContext.plan.length > 1
+      ) {
+        const steps = agentContext.plan
+          .map(function (step, index) {
+            return (index + 1) + ". " + step.action;
+          })
+          .join("\n");
+        const agentReply =
+          "J'ai compris la demande et préparé ce plan :\n" +
+          steps +
+          "\n\nL'exécution automatique sera activée à l'étape suivante.";
+        if (typeof NexaMemory !== "undefined") {
+          NexaMemory.addToHistory("user", text);
+          NexaMemory.addToHistory("nexa", agentReply);
+        }
+        return agentReply;
+      }
+    }
     if (attachment) {
       const ack =
         "J'ai bien reçu votre fichier « " + attachment.name + " ». " +
         "Je ne sais pas encore l'analyser en détail, mais c'est noté.";
-
       if (typeof NexaMemory !== "undefined") {
         NexaMemory.addToHistory(
           "user",
-          text ? text + " [fichier : " + attachment.name + "]" : "[fichier : " + attachment.name + "]"
+          text
+            ? text + " [fichier : " + attachment.name + "]"
+            : "[fichier : " + attachment.name + "]"
         );
         NexaMemory.addToHistory("nexa", ack);
       }
       return ack;
     }
-
     // 1) Les règles du Brain (prénom, notes, outils...)
     let reply = await this.decide(text);
-
     // 2) Si aucune règle ne correspond, le modèle IA choisit l'outil
     if (reply === null) {
       reply = await this.routeWithAI(text);
     }
-
     if (typeof NexaMemory !== "undefined") {
       NexaMemory.addToHistory("user", text);
       NexaMemory.addToHistory("nexa", reply);
     }
-
     return reply;
   },
-
   async useTool(name, args) {
-    if (typeof NexaTools === "undefined" || typeof NexaTools.run !== "function") {
-      return { ok: false, error: "Mes outils ne sont pas encore connectés." };
+    if (
+      typeof NexaTools === "undefined" ||
+      typeof NexaTools.run !== "function"
+    ) {
+      return {
+        ok: false,
+        error: "Mes outils ne sont pas encore connectés."
+      };
     }
     return await NexaTools.run(name, args);
   },
-
   getNotes() {
     if (typeof NexaMemory === "undefined") return [];
     const facts = NexaMemory.load().facts;
     const notes = [];
     for (const key of Object.keys(facts)) {
       if (key.startsWith("note_")) {
-        notes.push({ key: key, text: facts[key] });
+        notes.push({
+          key: key,
+          text: facts[key]
+        });
       }
     }
     return notes;
   },
-
   helpText() {
     return (
       "Voici ce que je sais faire :\n" +
@@ -97,28 +127,24 @@ const NexaBrain = {
       "- Question naturelle : posez-la simplement (ex : « où joue Cherki ? »), je choisirai moi-même l'outil adapté."
     );
   },
-
   formatPlace(str) {
     const text = (str || "").trim();
     if (!text) return text;
-
-    if (/,|\s(?:en|au|aux|dans)\s/i.test(text)) return text;
-
+    if (/,|\s(?:en|au|aux|dans)\s/i.test(text)) {
+      return text;
+    }
     const words = text.split(/\s+/);
     if (words.length < 2) return text;
-
     const last = words[words.length - 1];
     const lastNorm = last
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
-
     if (this.countries.includes(lastNorm)) {
       return words.slice(0, -1).join(" ") + ", " + last;
     }
     return text;
   },
-
   cleanCity(str) {
     const stopStart = [
       "fait-il", "fait", "il", "est-il", "à", "a", "de", "du", "des",
@@ -130,26 +156,29 @@ const NexaBrain = {
       "dehors", "ce", "matin", "soir", "s'il", "te", "plaît", "plait",
       "vous", "merci"
     ];
-
     let words = str
       .replace(/[?!.,;:]/g, " ")
       .trim()
       .split(/\s+/)
       .filter(Boolean);
-
-    while (words.length > 0 && stopStart.includes(words[0].toLowerCase())) {
+    while (
+      words.length > 0 &&
+      stopStart.includes(words[0].toLowerCase())
+    ) {
       words.shift();
     }
     if (words.length > 0 && /^d'/i.test(words[0])) {
       words[0] = words[0].slice(2);
       words = words.filter(Boolean);
     }
-    while (words.length > 0 && stopEnd.includes(words[words.length - 1].toLowerCase())) {
+    while (
+      words.length > 0 &&
+      stopEnd.includes(words[words.length - 1].toLowerCase())
+    ) {
       words.pop();
     }
     return words.join(" ").trim();
   },
-
   extractCity(clean) {
     const match = clean.match(
       /(?:il fait quel temps|quel temps|m[ée]t[ée]o(?![a-zà-ÿ])|temp[ée]rature)(.*)$/i
@@ -157,7 +186,6 @@ const NexaBrain = {
     if (!match) return "";
     return this.cleanCity(match[1]);
   },
-
   cleanTopic(str) {
     const stopStart = [
       "cherche", "chercher", "recherche", "rechercher", "trouve", "trouver",
@@ -171,108 +199,122 @@ const NexaBrain = {
       "sur", "dans", "svp", "stp", "s'il", "te", "plaît", "plait",
       "vous", "merci"
     ];
-
     let words = str
       .replace(/[?!.,;:]/g, " ")
       .trim()
       .split(/\s+/)
       .filter(Boolean);
-
     let removed = 0;
-    while (words.length > 0 && stopStart.includes(words[0].toLowerCase())) {
+    while (
+      words.length > 0 &&
+      stopStart.includes(words[0].toLowerCase())
+    ) {
       words.shift();
       removed++;
     }
     if (removed > 0 && words.length > 0 && /^d'./i.test(words[0])) {
       words[0] = words[0].slice(2);
     }
-    while (words.length > 0 && stopEnd.includes(words[words.length - 1].toLowerCase())) {
+    while (
+      words.length > 0 &&
+      stopEnd.includes(words[words.length - 1].toLowerCase())
+    ) {
       words.pop();
     }
     return words.join(" ").trim();
   },
-
   extractWikiQuery(clean) {
-    return this.cleanTopic(clean.replace(/wikip[ée]dia/gi, " "));
+    return this.cleanTopic(
+      clean.replace(/wikip[ée]dia/gi, " ")
+    );
   },
-
   async weatherReply(city) {
     const place = this.formatPlace(city);
     const r = await this.useTool("meteo", { city: place });
     if (!r.ok) return r.error;
     return r.result;
   },
-
   async wikiReply(topic) {
-    const r = await this.useTool("wikipedia", { query: topic });
+    const r = await this.useTool("wikipedia", {
+      query: topic
+    });
     if (!r.ok) return r.error;
     return r.result;
   },
-
   async taskCall(args) {
     const r = await this.useTool("taches", args);
     if (!r.ok) return r.error;
     return r.result;
   },
-
   async handleTasks(clean) {
-
     if (
       /(?:vide|vider|efface|effacer|supprime|supprimer|nettoie|nettoyer|r[ée]initialise)\s+(?:toutes?\s+)?(?:mes|les|ma)\s+(?:t[âa]ches|liste)/i.test(clean)
     ) {
-      return await this.taskCall({ action: "clear" });
+      return await this.taskCall({
+        action: "clear"
+      });
     }
-
     const deleteMatch = clean.match(
       /(?:supprime|supprimer|retire|retirer|enl[eè]ve|enlever|efface|effacer)\s+(?:la\s+)?t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)/i
     );
     if (deleteMatch) {
-      return await this.taskCall({ action: "delete", number: parseInt(deleteMatch[1], 10) });
+      return await this.taskCall({
+        action: "delete",
+        number: parseInt(deleteMatch[1], 10)
+      });
     }
-
     const doneMatch =
-      clean.match(/(?:termine|terminer|finis|finir|coche|cocher|valide|valider)\s+(?:la\s+)?t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)/i) ||
-      clean.match(/j'ai\s+(?:fini|termin[ée]|fait)\s+(?:la\s+)?t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)/i) ||
-      clean.match(/t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)\s+(?:est\s+)?(?:termin[ée]e|faite|finie|coch[ée]e)/i);
+      clean.match(
+        /(?:termine|terminer|finis|finir|coche|cocher|valide|valider)\s+(?:la\s+)?t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)/i
+      ) ||
+      clean.match(
+        /j'ai\s+(?:fini|termin[ée]|fait)\s+(?:la\s+)?t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)/i
+      ) ||
+      clean.match(
+        /t[âa]che\s*(?:num[ée]ro\s*|n[°o]\s*)?(\d+)\s+(?:est\s+)?(?:termin[ée]e|faite|finie|coch[ée]e)/i
+      );
     if (doneMatch) {
-      return await this.taskCall({ action: "done", number: parseInt(doneMatch[1], 10) });
+      return await this.taskCall({
+        action: "done",
+        number: parseInt(doneMatch[1], 10)
+      });
     }
-
     if (
       /(?:supprime|supprimer|retire|retirer|enl[eè]ve|enlever|termine|terminer|finis|finir|coche|cocher)\s+(?:la\s+)?t[âa]che\s*[?!.]*$/i.test(clean)
     ) {
       return "Quel est le numéro de la tâche ? Écrivez « Mes tâches » pour voir la liste.";
     }
-
     const addMatch = clean.match(
       /(?:ajoute|ajouter|rajoute|rajouter|nouvelle|cr[ée]e|cr[ée]er)\s+(?:une\s+|la\s+)?t[âa]che(?:\s*[:\-]\s*|\s+)?(.*)$/i
     );
     if (addMatch) {
-      return await this.taskCall({ action: "add", text: addMatch[1].trim() });
+      return await this.taskCall({
+        action: "add",
+        text: addMatch[1].trim()
+      });
     }
-
     const addListMatch = clean.match(
       /(?:ajoute|ajouter|rajoute|rajouter|mets|mettre)\s+(.+?)\s+(?:à|a|sur|dans)\s+ma\s+(?:liste|to-?do|todo)(?:\s+de\s+t[âa]ches)?\s*[.!]*$/i
     );
     if (addListMatch) {
-      return await this.taskCall({ action: "add", text: addListMatch[1].trim() });
+      return await this.taskCall({
+        action: "add",
+        text: addListMatch[1].trim()
+      });
     }
-
     if (
       /mes\s+t[âa]ches/i.test(clean) ||
       /^(?:(?:affiche|afficher|montre|montrer|donne|donner|voir|vois|lis)[-\s]*(?:moi\s+)?)?ma\s+(?:liste|to-?do|todo)(?:\s+de\s+t[âa]ches)?\s*[?!.]*$/i.test(clean)
     ) {
-      return await this.taskCall({ action: "list" });
+      return await this.taskCall({
+        action: "list"
+      });
     }
-
     return null;
   },
-
   // --------------------------------------------
-  // NOUVEAU : le modèle IA choisit l'outil à utiliser
+  // Le modèle IA choisit l'outil à utiliser
   // quand aucune règle du Brain ne reconnaît la phrase.
-  // Un seul appel IA : soit il renvoie un outil + un
-  // argument, soit il répond directement (chat).
   // --------------------------------------------
   async routeWithAI(text) {
     if (typeof NexaAI === "undefined") {
@@ -281,9 +323,7 @@ const NexaBrain = {
         "Le module IA n'est pas encore connecté."
       );
     }
-
     const hasMemory = typeof NexaMemory !== "undefined";
-
     let system =
       "Tu es NEXA, l'assistant personnel de l'utilisateur, et aussi son routeur d'intentions. " +
       "Pour CHAQUE message reçu, réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, sans balises de code, au format exact : " +
@@ -299,63 +339,71 @@ const NexaBrain = {
       "Pour une liste de tâches, dans reply dis-lui d'écrire « Ajoute une tâche : ... » ou « Mes tâches ». " +
       "Pour un chronomètre, dans reply dis-lui d'écrire « Chrono ». " +
       "S'il demande ce que tu sais faire, dans reply dis-lui d'écrire « Aide ».";
-
-    const name = hasMemory ? NexaMemory.recall("prenom") : null;
+    const name = hasMemory
+      ? NexaMemory.recall("prenom")
+      : null;
     if (name) {
       system += " L'utilisateur s'appelle " + name + ".";
     }
-
-    const ville = hasMemory ? NexaMemory.recall("ville") : null;
+    const ville = hasMemory
+      ? NexaMemory.recall("ville")
+      : null;
     if (ville) {
       system += " Sa ville est " + ville + ".";
     }
-
     const notes = this.getNotes();
     if (notes.length > 0) {
-      system += " Voici ce que l'utilisateur t'a demandé de retenir :";
+      system += " Voici ce que l'utilisateur t'a demandé de retenir:";
       for (const n of notes) {
         system += " - " + n.text + ".";
       }
       system += " Utilise ces informations quand c'est pertinent.";
     }
-
-    const messages = [{ role: "system", content: system }];
-
+    const messages = [
+      {
+        role: "system",
+        content: system
+      }
+    ];
     if (hasMemory) {
-      const recent = NexaMemory.getHistory()
+      const recent = NexaMemory
+        .getHistory()
         .filter(function (m) {
-          return !(m.role === "nexa" && m.text.startsWith("Mon Brain a bien reçu"));
+          return !(
+            m.role === "nexa" &&
+            m.text.startsWith("Mon Brain a bien reçu")
+          );
         })
         .slice(-6);
-
       for (const m of recent) {
         messages.push({
-          role: m.role === "nexa" ? "assistant" : "user",
+          role: m.role === "nexa"
+            ? "assistant"
+            : "user",
           content: m.text
         });
       }
     }
-
-    messages.push({ role: "user", content: text });
-
+    messages.push({
+      role: "user",
+      content: text
+    });
     const raw = await NexaAI.ask(messages);
     const decision = this.parseRouterJSON(raw);
-
-    // Le modèle n'a pas renvoyé de JSON exploitable : on utilise
-    // sa réponse telle quelle, comme une conversation normale.
     if (!decision) {
       return raw;
     }
-
     if (decision.tool === "meteo") {
-      const city = (decision.argument || "").trim() || (hasMemory ? NexaMemory.recall("ville") : "") || "";
+      const city =
+        (decision.argument || "").trim() ||
+        (hasMemory ? NexaMemory.recall("ville") : "") ||
+        "";
       if (!city) {
         this.pending = "meteo";
         return "Pour quelle ville ? Vous pouvez aussi me dire « J'habite à ... » pour que je m'en souvienne.";
       }
       return await this.weatherReply(city);
     }
-
     if (decision.tool === "wikipedia") {
       const topic = (decision.argument || "").trim();
       if (!topic) {
@@ -364,45 +412,55 @@ const NexaBrain = {
       }
       return await this.wikiReply(topic);
     }
-
     if (decision.tool === "calcul") {
       const expr = (decision.argument || "").trim();
       if (!expr) {
         return "Quel calcul voulez-vous faire ?";
       }
-      const r = await this.useTool("calcul", { expression: expr });
+      const r = await this.useTool(
+        "calcul",
+        {
+          expression: expr
+        }
+      );
       if (!r.ok) return r.error;
       if (r.result !== null) {
-        return "Le résultat est " + String(r.result).replace(".", ",") + ".";
+        return "Le résultat est " +
+          String(r.result).replace(".", ",") +
+          ".";
       }
       return "Je n'ai pas réussi à faire ce calcul.";
     }
-
-    // tool === "chat", ou une valeur inconnue : on utilise "reply"
     const reply = (decision.reply || "").trim();
-    return reply || raw || "Je n'ai pas de réponse à vous donner pour l'instant.";
+    return (
+      reply ||
+      raw ||
+      "Je n'ai pas de réponse à vous donner pour l'instant."
+    );
   },
-
-  // Essaie de lire un JSON renvoyé par le modèle, même si le
-  // modèle a ajouté du texte ou des balises ```json autour.
+  // Essaie de lire un JSON renvoyé par le modèle,
+  // même si le modèle a ajouté du texte ou des balises.
   parseRouterJSON(raw) {
     if (!raw) return null;
     let text = raw.trim();
-
     text = text
       .replace(/^```json/i, "")
       .replace(/^```/, "")
       .replace(/```$/, "")
       .trim();
-
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    if (start === -1 || end === -1 || end < start) return null;
+    if (start === -1 || end === -1 || end < start) {
+      return null;
+    }
     text = text.slice(start, end + 1);
-
     try {
       const data = JSON.parse(text);
-      if (data && typeof data === "object" && typeof data.tool === "string") {
+      if (
+        data &&
+        typeof data === "object" &&
+        typeof data.tool === "string"
+      ) {
         return data;
       }
     } catch (e) {
@@ -410,22 +468,23 @@ const NexaBrain = {
     }
     return null;
   },
-
   // Décide de la réponse selon le message.
   // Renvoie null si aucune règle ne correspond.
   async decide(text) {
     const clean = text.replace(/[’‘`]/g, "'");
     const lower = clean.toLowerCase();
     const hasMemory = typeof NexaMemory !== "undefined";
-
-    if (this.pending && /t[âa]ches?|ma\s+liste|(^|\s)aide(\s|$)/i.test(clean)) {
+    if (
+      this.pending &&
+      /t[âa]ches?|ma\s+liste|(^|\s)aide(\s|$)/i.test(clean)
+    ) {
       this.pending = null;
     }
-
     if (this.pending === "meteo") {
       this.pending = null;
       const shortAnswer =
-        clean.split(/\s+/).length <= 4 && !clean.includes("?");
+        clean.split(/\s+/).length <= 4 &&
+        !clean.includes("?");
       if (shortAnswer) {
         const city = this.cleanCity(clean);
         if (city) {
@@ -435,7 +494,8 @@ const NexaBrain = {
     } else if (this.pending === "wikipedia") {
       this.pending = null;
       const shortAnswer =
-        clean.split(/\s+/).length <= 6 && !clean.includes("?");
+        clean.split(/\s+/).length <= 6 &&
+        !clean.includes("?");
       if (shortAnswer) {
         const topic = this.cleanTopic(clean);
         if (topic) {
@@ -443,7 +503,6 @@ const NexaBrain = {
         }
       }
     }
-
     // --- Aide : liste des commandes ---
     if (
       /^(aide|help|menu|commandes)\s*[?!.]*$/i.test(clean) ||
@@ -456,20 +515,22 @@ const NexaBrain = {
     ) {
       return this.helpText();
     }
-
     // --- Gestion de la clé du modèle IA ---
-    const mentionsKey = /(^|[^a-zà-ÿ])cl[ée]([^a-zà-ÿ]|$)/i.test(clean);
+    const mentionsKey =
+      /(^|[^a-zà-ÿ])cl[ée]([^a-zà-ÿ]|$)/i.test(clean);
     if (mentionsKey) {
       if (typeof NexaAI === "undefined") {
         return "Mon module IA n'est pas connecté.";
       }
-
-      if (/supprim|efface|oublie|retire|enl[eè]ve/i.test(lower)) {
+      if (
+        /supprim|efface|oublie|retire|enl[eè]ve/i.test(lower)
+      ) {
         NexaAI.clearKey();
         return "C'est fait. J'ai supprimé la clé enregistrée sur cet iPhone. Pour en remettre une, écrivez « Change ma clé ».";
       }
-
-      if (/chang|modifi|nouvelle|remplac|ajoute|saisi|entre|mets/i.test(lower)) {
+      if (
+        /chang|modifi|nouvelle|remplac|ajoute|saisi|entre|mets/i.test(lower)
+      ) {
         const oldKey = NexaAI.getKey();
         NexaAI.clearKey();
         const newKey = NexaAI.ensureKey();
@@ -483,7 +544,6 @@ const NexaBrain = {
         return "Aucune clé saisie. Écrivez « Change ma clé » quand vous voulez en enregistrer une.";
       }
     }
-
     // --- Effacer la conversation ---
     if (
       /(efface|supprime|vide|nettoie|oublie|r[ée]initialise)\s+(?:toute\s+|tout\s+)?(?:la\s+|notre\s+|cette\s+|l')\s*(?:conversation|historique)/i.test(lower)
@@ -496,26 +556,28 @@ const NexaBrain = {
       NexaMemory.save(data);
       return "C'est fait. J'ai effacé l'historique de la conversation. Votre prénom, votre ville, vos notes et vos tâches sont conservés. Rechargez la page pour vider l'écran.";
     }
-
     // --- Tool : chronomètre ---
     if (/chronom[eè]tre|\bchrono\b|\btimer\b/i.test(lower)) {
       const r = await this.useTool("chronometre");
       if (!r.ok) return r.error;
       return r.result;
     }
-
     // --- Tool : liste de tâches ---
     const taskReply = await this.handleTasks(clean);
     if (taskReply !== null) {
       return taskReply;
     }
-
     // --- Retenir la ville ---
     const villeMatch =
-      clean.match(/j'habite\s+(?:(?:à|a|en|au|aux|dans)\s+)?([^.,!?]+)/i) ||
-      clean.match(/(?:je vis|je réside|je suis basée?)\s+(?:à|en|au|aux|dans)\s+([^.,!?]+)/i) ||
-      clean.match(/ma ville (?:est|c'est)\s+([^.,!?]+)/i);
-
+      clean.match(
+        /j'habite\s+(?:(?:à|a|en|au|aux|dans)\s+)?([^.,!?]+)/i
+      ) ||
+      clean.match(
+        /(?:je vis|je réside|je suis basée?)\s+(?:à|en|au|aux|dans)\s+([^.,!?]+)/i
+      ) ||
+      clean.match(
+        /ma ville (?:est|c'est)\s+([^.,!?]+)/i
+      );
     if (villeMatch && !clean.includes("?")) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
@@ -526,12 +588,15 @@ const NexaBrain = {
         .slice(0, 60);
       if (raw) {
         raw = this.formatPlace(raw);
-        const ville = raw.charAt(0).toUpperCase() + raw.slice(1);
+        const ville =
+          raw.charAt(0).toUpperCase() +
+          raw.slice(1);
         NexaMemory.remember("ville", ville);
-        return "C'est noté : votre ville est " + ville + ".";
+        return "C'est noté : votre ville est " +
+          ville +
+          ".";
       }
     }
-
     // --- Retenir une note libre ---
     const noteMatch = clean.match(
       /(?:retiens|retenir|souviens-toi|souviens toi|n'oublie pas)\s+(?:que|qu')\s*(.+)/i
@@ -540,14 +605,20 @@ const NexaBrain = {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
       }
-      const note = noteMatch[1].trim().slice(0, 300);
+      const note = noteMatch[1]
+        .trim()
+        .slice(0, 300);
       if (!note) {
         return "Que dois-je retenir ? Dites par exemple : « Retiens que j'aime le café ».";
       }
-      NexaMemory.remember("note_" + Date.now(), note);
-      return "C'est noté : « " + note + " ». Je m'en souviendrai.";
+      NexaMemory.remember(
+        "note_" + Date.now(),
+        note
+      );
+      return "C'est noté : « " +
+        note +
+        " ». Je m'en souviendrai.";
     }
-
     // --- Afficher ce que NEXA retient ---
     if (
       lower.includes("que retiens-tu") ||
@@ -566,11 +637,9 @@ const NexaBrain = {
         const name = NexaMemory.recall("prenom");
         const ville = NexaMemory.recall("ville");
         const notes = this.getNotes();
-
         if (!name && !ville && notes.length === 0) {
           return "Je ne retiens rien pour le moment. Dites-moi par exemple : « Retiens que j'aime le café ».";
         }
-
         let answer = "Voici ce que je retiens :";
         if (name) {
           answer += "\n- Prénom : " + name;
@@ -584,9 +653,11 @@ const NexaBrain = {
         return answer;
       }
     }
-
     // --- Oublier les notes ---
-    if (lower.includes("oublie mes notes") || lower.includes("efface mes notes")) {
+    if (
+      lower.includes("oublie mes notes") ||
+      lower.includes("efface mes notes")
+    ) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
       }
@@ -594,9 +665,10 @@ const NexaBrain = {
       for (const n of notes) {
         NexaMemory.forget(n.key);
       }
-      return "C'est fait. J'ai oublié vos notes (" + notes.length + ").";
+      return "C'est fait. J'ai oublié vos notes (" +
+        notes.length +
+        ").";
     }
-
     // --- Oublier la ville ---
     if (lower.includes("oublie ma ville")) {
       if (!hasMemory) {
@@ -605,7 +677,6 @@ const NexaBrain = {
       NexaMemory.forget("ville");
       return "C'est fait. J'ai oublié votre ville.";
     }
-
     // --- Retrouver le prénom ---
     if (
       lower.includes("comment je m'appelle") ||
@@ -617,11 +688,12 @@ const NexaBrain = {
       }
       const name = NexaMemory.recall("prenom");
       if (name) {
-        return "Vous vous appelez " + name + ".";
+        return "Vous vous appelez " +
+          name +
+          ".";
       }
       return "Je ne connais pas encore votre prénom. Dites-moi : « Je m'appelle ... ».";
     }
-
     // --- Oublier tout ---
     if (lower.includes("oublie tout")) {
       if (!hasMemory) {
@@ -630,15 +702,16 @@ const NexaBrain = {
       NexaMemory.clear();
       return "C'est fait. J'ai tout oublié (prénom, ville, notes et tâches).";
     }
-
-    if (lower.includes("oublie mon prénom") || lower.includes("oublie mon prenom")) {
+    if (
+      lower.includes("oublie mon prénom") ||
+      lower.includes("oublie mon prenom")
+    ) {
       if (!hasMemory) {
         return "Ma mémoire n'est pas encore connectée.";
       }
       NexaMemory.forget("prenom");
       return "C'est fait. J'ai oublié votre prénom.";
     }
-
     // --- Retenir le prénom ---
     const nameMatch = clean.match(
       /(?:je m'appelle|moi c'est|mon prénom est|mon prenom est)\s+([^\s.,!?]+)/i
@@ -648,11 +721,14 @@ const NexaBrain = {
         return "Ma mémoire n'est pas encore connectée.";
       }
       const raw = nameMatch[1];
-      const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+      const name =
+        raw.charAt(0).toUpperCase() +
+        raw.slice(1);
       NexaMemory.remember("prenom", name);
-      return "Enchanté " + name + ". Je m'en souviendrai.";
+      return "Enchanté " +
+        name +
+        ". Je m'en souviendrai.";
     }
-
     // --- Tool : Wikipédia (formulation explicite) ---
     if (/wikip[ée]dia/i.test(clean)) {
       const topic = this.extractWikiQuery(clean);
@@ -662,37 +738,38 @@ const NexaBrain = {
       }
       return await this.wikiReply(topic);
     }
-
     // --- Tool : la météo (formulation explicite) ---
     const asksWeather =
       /m[ée]t[ée]o(?![a-zà-ÿ])|quel temps|quelle temp[ée]rature fait/i.test(clean);
-
     if (asksWeather) {
-      if (/demain|semaine|week-end|weekend/i.test(lower)) {
+      if (
+        /demain|semaine|week-end|weekend/i.test(lower)
+      ) {
         return "Pour l'instant, je sais seulement donner la météo du jour.";
       }
-
       let city = this.extractCity(clean);
-
       if (!city && hasMemory) {
-        city = NexaMemory.recall("ville") || "";
+        city =
+          NexaMemory.recall("ville") ||
+          "";
       }
-
       if (!city) {
         this.pending = "meteo";
         return "Pour quelle ville ? Vous pouvez aussi me dire « J'habite à ... » pour que je m'en souvienne.";
       }
-
       return await this.weatherReply(city);
     }
-
     // --- Tool : l'heure ---
-    if (lower.includes("quelle heure") || lower.includes("l'heure")) {
+    if (
+      lower.includes("quelle heure") ||
+      lower.includes("l'heure")
+    ) {
       const r = await this.useTool("heure");
       if (!r.ok) return r.error;
-      return "Il est " + r.result + ".";
+      return "Il est " +
+        r.result +
+        ".";
     }
-
     // --- Tool : la date ---
     if (
       lower.includes("quelle date") ||
@@ -701,10 +778,11 @@ const NexaBrain = {
     ) {
       const r = await this.useTool("date");
       if (!r.ok) return r.error;
-      return "Nous sommes le " + r.result + ".";
+      return "Nous sommes le " +
+        r.result +
+        ".";
     }
-
-    // --- Tool : les calculs (formulation explicite) ---
+    // --- Tool : les calculs ---
     const calcMatch = clean.match(
       /(?:calcule|calcul|combien font|combien fait|combien vaut)\s*:?\s*(.+)/i
     );
@@ -712,25 +790,31 @@ const NexaBrain = {
       /^[0-9+\-*/().,\s×÷x]+$/i.test(clean) &&
       /[0-9]/.test(clean) &&
       /[+\-*/×÷x]/i.test(clean);
-
     if (calcMatch || looksLikeMath) {
-      const expression = (calcMatch ? calcMatch[1] : clean)
+      const expression = (
+        calcMatch
+          ? calcMatch[1]
+          : clean
+      )
         .replace(/\?/g, "")
         .replace(/(\d)\s*x\s*(\d)/gi, "$1*$2")
         .trim();
-
-      const r = await this.useTool("calcul", { expression: expression });
-
+      const r = await this.useTool(
+        "calcul",
+        {
+          expression: expression
+        }
+      );
       if (!r.ok) return r.error;
-
       if (r.result !== null) {
-        return "Le résultat est " + String(r.result).replace(".", ",") + ".";
+        return "Le résultat est " +
+          String(r.result).replace(".", ",") +
+          ".";
       }
       if (calcMatch) {
         return "Je n'ai pas réussi à faire ce calcul. Essayez par exemple : « calcule 12 * 5 + 3 ».";
       }
     }
-
     // --- Salutations ---
     if (
       lower.startsWith("bonjour") ||
@@ -738,19 +822,25 @@ const NexaBrain = {
       lower.startsWith("coucou") ||
       lower.startsWith("hello")
     ) {
-      const known = hasMemory ? NexaMemory.recall("prenom") : null;
+      const known = hasMemory
+        ? NexaMemory.recall("prenom")
+        : null;
       if (known) {
-        return "Bonjour " + known + ". Ravi de vous retrouver.";
+        return "Bonjour " +
+          known +
+          ". Ravi de vous retrouver.";
       }
       return "Bonjour. Je suis NEXA. Mon cerveau est en construction, mais je vous écoute.";
     }
-
     // --- Identité ---
-    if (lower.includes("qui es-tu") || lower.includes("qui es tu")) {
+    if (
+      lower.includes("qui es-tu") ||
+      lower.includes("qui es tu")
+    ) {
       return "Je suis NEXA, votre système intelligent personnel. Je suis construit étape par étape.";
     }
-
-    // --- Aucune règle ne correspond : le modèle IA choisira l'outil ---
+    // --- Aucune règle ne correspond :
+    // le modèle IA choisira l'outil.
     return null;
   }
 };
