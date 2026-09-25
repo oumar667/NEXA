@@ -328,3 +328,184 @@ const NexaTools = {
       const hits = searchData.query && searchData.query.search;
       if (!hits || hits.length === 0) {
         return "Je n'ai rien trouvé sur Wikipédia pour « " + q + " ».";
+      }
+
+      const title = hits[0].title;
+
+      const summaryUrl =
+        "https://fr.wikipedia.org/w/api.php" +
+        "?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=3" +
+        "&redirects=1&format=json&formatversion=2&origin=*" +
+        "&titles=" + encodeURIComponent(title);
+
+      const summaryResponse = await fetch(summaryUrl);
+      if (!summaryResponse.ok) {
+        return "Je n'arrive pas à lire la page Wikipédia pour le moment.";
+      }
+      const summaryData = await summaryResponse.json();
+
+      const pages = summaryData.query && summaryData.query.pages;
+      const page = pages && pages[0];
+      let extract = page && page.extract ? page.extract.trim() : "";
+
+      const link =
+        "https://fr.wikipedia.org/wiki/" +
+        encodeURIComponent(title.replace(/ /g, "_"));
+
+      if (!extract) {
+        return "J'ai trouvé la page « " + title + " » mais sans résumé disponible.\nSource : " + link;
+      }
+
+      if (extract.length > 700) {
+        extract = extract.slice(0, 700).trim() + "…";
+      }
+
+      return "Wikipédia — " + title + " :\n" + extract + "\n\nSource : " + link;
+    } catch (e) {
+      return "Impossible de joindre Wikipédia. Vérifiez votre connexion.";
+    }
+  },
+
+  // --------------------------------------------
+  // OUTIL : la liste de tâches (gardée dans la Memory)
+  // --------------------------------------------
+  tasksKey: "tasks",
+
+  loadTasks() {
+    if (typeof NexaMemory === "undefined") return null;
+    const list = NexaMemory.recall(this.tasksKey);
+    return Array.isArray(list) ? list : [];
+  },
+
+  saveTasks(list) {
+    if (typeof NexaMemory === "undefined") return false;
+    return NexaMemory.remember(this.tasksKey, list);
+  },
+
+  formatTasks(list) {
+    return list
+      .map(function (t, i) {
+        return (i + 1) + ". " + (t.done ? "✅" : "☐") + " " + t.text;
+      })
+      .join("\n");
+  },
+
+  manageTasks(action, text, number) {
+    const list = this.loadTasks();
+    if (list === null) {
+      return "Ma mémoire n'est pas encore connectée.";
+    }
+
+    if (action === "add") {
+      let t = (text || "").trim().slice(0, 200);
+      if (!t) {
+        return "Quelle tâche voulez-vous ajouter ?";
+      }
+      if (list.length >= 50) {
+        return "Votre liste est pleine (50 tâches). Terminez ou supprimez-en avant d'en ajouter.";
+      }
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+      list.push({
+        text: t,
+        done: false,
+        created: new Date().toISOString()
+      });
+      this.saveTasks(list);
+      return "C'est ajouté : « " + t + " ». Vous avez " + list.length + " tâche(s) dans votre liste.";
+    }
+
+    if (action === "list") {
+      if (list.length === 0) {
+        return "Votre liste est vide. Dites par exemple : « Ajoute une tâche : appeler le médecin ».";
+      }
+      const remaining = list.filter(function (t) {
+        return !t.done;
+      }).length;
+      return (
+        "Vos tâches (" + remaining + " à faire sur " + list.length + ") :\n" +
+        this.formatTasks(list)
+      );
+    }
+
+    if (action === "clear") {
+      const count = list.length;
+      this.saveTasks([]);
+      return "C'est fait. J'ai vidé votre liste (" + count + " tâche(s) supprimée(s)).";
+    }
+
+    if (action === "done" || action === "delete") {
+      const n = Number(number);
+      if (!Number.isInteger(n) || n < 1 || n > list.length) {
+        return "Je ne trouve pas la tâche " + number + ". Écrivez « Mes tâches » pour voir la liste.";
+      }
+
+      const task = list[n - 1];
+
+      if (action === "done") {
+        if (task.done) {
+          return "La tâche " + n + " est déjà terminée : « " + task.text + " ».";
+        }
+        task.done = true;
+        this.saveTasks(list);
+        return "Bien joué ! Tâche " + n + " terminée : « " + task.text + " ».";
+      }
+
+      list.splice(n - 1, 1);
+      this.saveTasks(list);
+      return "C'est supprimé : « " + task.text + " ». Il reste " + list.length + " tâche(s).";
+    }
+
+    return "Je ne sais pas faire cette action sur la liste de tâches.";
+  },
+
+  // --------------------------------------------
+  // OUTIL : chronomètre (affichage HTML interactif)
+  // Les boutons appellent startChrono/stopChrono/resetChrono,
+  // déjà définis dans index.html.
+  // --------------------------------------------
+  createChronometer() {
+    const id = "chrono_" + Date.now();
+    return (
+      '<div style="background:rgba(255,255,255,0.05); padding:12px 16px; border-radius:14px; border:1px solid rgba(255,255,255,0.1); margin-top:8px; display:inline-block; text-align:center;">' +
+      '⏱️ <b>Chronomètre NEXA</b><br>' +
+      '<span id="' + id + '" style="font-size:1.4rem; font-weight:bold; font-family:monospace; color:#a78bfa;">00:00:00</span><br>' +
+      '<div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">' +
+      '<button onclick="startChrono(\'' + id + '\')" style="padding:4px 10px; background:#4ade80; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Start</button>' +
+      '<button onclick="stopChrono(\'' + id + '\')" style="padding:4px 10px; background:#f87171; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Stop</button>' +
+      '<button onclick="resetChrono(\'' + id + '\')" style="padding:4px 10px; background:#9ca3af; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Reset</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+};
+
+// --------------------------------------------
+// On déclare les outils dans le registre
+// --------------------------------------------
+NexaTools.register("heure", "Donne l'heure actuelle.", function () {
+  return NexaTools.getTime();
+});
+
+NexaTools.register("date", "Donne la date d'aujourd'hui.", function () {
+  return NexaTools.getDate();
+});
+
+NexaTools.register("calcul", "Fait un calcul mathématique (argument : expression).", function (args) {
+  return NexaTools.calculate(args.expression || "");
+});
+
+NexaTools.register("meteo", "Donne la météo d'une ville (argument : city).", function (args) {
+  return NexaTools.getWeather(args.city || "");
+});
+
+NexaTools.register("wikipedia", "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).", function (args) {
+  return NexaTools.searchWikipedia(args.query || "");
+});
+
+NexaTools.register("taches", "Gère la liste de tâches (arguments : action = add, list, done, delete ou clear ; text ; number).", function (args) {
+  return NexaTools.manageTasks(args.action, args.text, args.number);
+});
+
+NexaTools.register("chronometre", "Affiche un chronomètre interactif (Start/Stop/Reset).", function () {
+  return NexaTools.createChronometer();
+});
