@@ -1,6 +1,6 @@
 // ============================================
-// NEXA AGENT - version 0.2
-// Socle du futur Agent autonome de NEXA.
+// NEXA AGENT - version 0.3
+// Planner + Executor
 //
 // Rôle actuel :
 // - créer un contexte d'exécution
@@ -8,18 +8,18 @@
 // - créer un plan
 // - stocker un plan
 // - suivre les étapes
+// - exécuter les Tools
 // - stocker les résultats
 // - gérer l'état de l'exécution
 //
 // IMPORTANT :
-// Cette version ne modifie encore aucun comportement
-// existant de NEXA et n'exécute pas encore les Tools.
+// Cette version ajoute l'Executor.
+// Elle n'est pas encore connectée automatiquement
+// au Brain pour les exécutions multi-étapes.
 // ============================================
 const NexaAgent = {
-  version: "0.2",
-  // Nombre maximum d'étapes autorisées pour une exécution.
+  version: "0.3",
   MAX_STEPS: 10,
-  // États possibles d'une exécution.
   STATES: {
     IDLE: "idle",
     PLANNING: "planning",
@@ -48,7 +48,7 @@ const NexaAgent = {
     };
   },
   // --------------------------------------------
-  // Génère un identifiant simple pour une exécution.
+  // Génère un identifiant d'exécution.
   // --------------------------------------------
   createExecutionId() {
     return (
@@ -59,7 +59,7 @@ const NexaAgent = {
     );
   },
   // --------------------------------------------
-  // Définit l'objectif de l'exécution.
+  // Définit l'objectif.
   // --------------------------------------------
   setObjective(context, objective) {
     if (!context || typeof context !== "object") {
@@ -73,19 +73,18 @@ const NexaAgent = {
     return context;
   },
   // --------------------------------------------
-  // Crée un premier plan local à partir d'un objectif.
+  // Planner local.
   // --------------------------------------------
   createPlan(objective) {
     const text = String(objective || "").trim();
     if (!text) {
       return [];
     }
+    const weatherCities = this.extractWeatherCities(text);
     // ------------------------------------------
-    // Comparaison de plusieurs villes.
     // Exemple :
     // "Compare la météo de Paris et Lyon"
     // ------------------------------------------
-    const weatherCities = this.extractWeatherCities(text);
     if (weatherCities.length >= 2) {
       const plan = [];
       weatherCities
@@ -107,7 +106,7 @@ const NexaAgent = {
       return plan.slice(0, this.MAX_STEPS);
     }
     // ------------------------------------------
-    // Demande contenant plusieurs actions explicites.
+    // Plusieurs actions explicites.
     // ------------------------------------------
     const actionSeparators =
       /\s+(?:puis|ensuite|et ensuite|après|ensuite il faut)\s+/i;
@@ -129,9 +128,6 @@ const NexaAgent = {
           };
         });
     }
-    // ------------------------------------------
-    // Une seule étape.
-    // ------------------------------------------
     return [
       {
         id: "step-1",
@@ -142,8 +138,7 @@ const NexaAgent = {
     ];
   },
   // --------------------------------------------
-  // Extrait les villes présentes dans une demande
-  // météo.
+  // Extrait les villes météo connues.
   // --------------------------------------------
   extractWeatherCities(text) {
     const knownCities = [
@@ -215,9 +210,9 @@ const NexaAgent = {
         action: action,
         tool: step.tool || null,
         argument: step.argument ?? null,
-        status: "pending",
-        result: null,
-        error: null
+        status: step.status || "pending",
+        result: step.result ?? null,
+        error: step.error ?? null
       };
     });
     context.plan = normalizedPlan;
@@ -225,7 +220,7 @@ const NexaAgent = {
     return context;
   },
   // --------------------------------------------
-  // Valide la structure d'un contexte.
+  // Valide un contexte.
   // --------------------------------------------
   validateContext(context) {
     if (!context || typeof context !== "object") {
@@ -263,7 +258,7 @@ const NexaAgent = {
     };
   },
   // --------------------------------------------
-  // Enregistre le résultat d'une étape.
+  // Enregistre un résultat.
   // --------------------------------------------
   addResult(context, stepId, result) {
     if (!context || typeof context !== "object") {
@@ -287,7 +282,7 @@ const NexaAgent = {
     return entry;
   },
   // --------------------------------------------
-  // Change l'état de l'exécution.
+  // Change l'état.
   // --------------------------------------------
   setState(context, state) {
     if (!context || typeof context !== "object") {
@@ -307,7 +302,7 @@ const NexaAgent = {
     return context;
   },
   // --------------------------------------------
-  // Retourne l'étape actuellement sélectionnée.
+  // Retourne l'étape actuelle.
   // --------------------------------------------
   getCurrentStep(context) {
     if (!context || !Array.isArray(context.plan)) {
@@ -334,7 +329,7 @@ const NexaAgent = {
     return this.getCurrentStep(context);
   },
   // --------------------------------------------
-  // Vérifie si toutes les étapes sont terminées.
+  // Vérifie si le plan est terminé.
   // --------------------------------------------
   isPlanComplete(context) {
     if (!context || !Array.isArray(context.plan)) {
@@ -348,7 +343,7 @@ const NexaAgent = {
     });
   },
   // --------------------------------------------
-  // Marque une étape comme terminée.
+  // Marque une étape terminée.
   // --------------------------------------------
   completeStep(context, stepId, result) {
     if (!context || !Array.isArray(context.plan)) {
@@ -370,7 +365,7 @@ const NexaAgent = {
     return step;
   },
   // --------------------------------------------
-  // Marque une étape comme échouée.
+  // Marque une étape échouée.
   // --------------------------------------------
   failStep(context, stepId, error) {
     if (!context || !Array.isArray(context.plan)) {
@@ -392,28 +387,145 @@ const NexaAgent = {
     context.error = message;
     return step;
   },
+  // ============================================
+  // EXECUTOR
+  // ============================================
   // --------------------------------------------
-  // Prépare une exécution Agent.
+  // Exécute un outil NEXA.
   //
-  // CORRECTION v0.2 :
-  // Si objective n'est pas fourni, la demande
-  // utilisateur devient automatiquement l'objectif.
+  // Cette fonction ne connaît pas les détails
+  // internes des Tools.
+  // Elle passe simplement par NexaTools.run().
+  // --------------------------------------------
+  async executeTool(step) {
+    if (
+      typeof NexaTools === "undefined" ||
+      typeof NexaTools.run !== "function"
+    ) {
+      return {
+        ok: false,
+        error: "NexaTools n'est pas disponible."
+      };
+    }
+    if (!step || !step.tool) {
+      return {
+        ok: false,
+        error: "Cette étape ne possède aucun outil à exécuter."
+      };
+    }
+    try {
+      const result = await NexaTools.run(
+        step.tool,
+        step.argument
+      );
+      if (!result || typeof result !== "object") {
+        return {
+          ok: false,
+          error: "Le Tool a renvoyé une réponse invalide."
+        };
+      }
+      return result;
+    } catch (error) {
+      return {
+        ok: false,
+        error:
+          error && error.message
+            ? error.message
+            : String(error)
+      };
+    }
+  },
+  // --------------------------------------------
+  // Exécute le plan étape par étape.
+  //
+  // Pour cette version :
+  // - les étapes possédant un Tool sont exécutées ;
+  // - les étapes sans Tool restent en attente.
+  //
+  // C'est volontaire :
+  // l'étape "Comparer..." nécessitera le futur
+  // Verifier / Finalizer.
+  // --------------------------------------------
+  async executePlan(context) {
+    const validation = this.validateContext(context);
+    if (!validation.ok) {
+      context.state = this.STATES.FAILED;
+      context.error = validation.error;
+      context.finishedAt = Date.now();
+      return context;
+    }
+    this.setState(context, this.STATES.EXECUTING);
+    for (
+      let index = 0;
+      index < context.plan.length;
+      index += 1
+    ) {
+      const step = context.plan[index];
+      context.currentStep = index;
+      // Étape déjà terminée : on ne la rejoue pas.
+      if (step.status === "completed") {
+        continue;
+      }
+      // Une étape sans Tool ne peut pas encore être
+      // exécutée automatiquement.
+      if (!step.tool) {
+        break;
+      }
+      step.status = "executing";
+      const result = await this.executeTool(step);
+      if (!result || result.ok === false) {
+        this.failStep(
+          context,
+          step.id,
+          result && result.error
+            ? result.error
+            : "Échec de l'exécution du Tool."
+        );
+        this.setState(
+          context,
+          this.STATES.FAILED
+        );
+        return context;
+      }
+      this.completeStep(
+        context,
+        step.id,
+        result.result
+      );
+    }
+    // Si toutes les étapes sont terminées,
+    // l'exécution peut être considérée comme complète.
+    if (this.isPlanComplete(context)) {
+      this.setState(
+        context,
+        this.STATES.COMPLETED
+      );
+    }
+    return context;
+  },
+  // --------------------------------------------
+  // Prépare une exécution.
   // --------------------------------------------
   prepare(message, objective, plan) {
     const context = this.createContext(message);
-    // Si aucun objectif explicite n'est fourni,
-    // on utilise directement la demande utilisateur.
     const agentObjective =
       objective && String(objective).trim()
         ? String(objective).trim()
         : context.input;
-    this.setObjective(context, agentObjective);
+    this.setObjective(
+      context,
+      agentObjective
+    );
     const generatedPlan =
       Array.isArray(plan) && plan.length > 0
         ? plan
         : this.createPlan(agentObjective);
-    this.setPlan(context, generatedPlan);
-    const validation = this.validateContext(context);
+    this.setPlan(
+      context,
+      generatedPlan
+    );
+    const validation =
+      this.validateContext(context);
     if (!validation.ok) {
       context.state = this.STATES.FAILED;
       context.error = validation.error;
@@ -424,17 +536,37 @@ const NexaAgent = {
     return context;
   },
   // --------------------------------------------
-  // Retourne une copie exploitable du contexte.
+  // Point d'entrée complet :
+  // prépare puis exécute le plan.
+  //
+  // Cette fonction sera utilisée par le Brain
+  // à l'étape suivante.
+  // --------------------------------------------
+  async run(message, objective, plan) {
+    const context = this.prepare(
+      message,
+      objective,
+      plan
+    );
+    if (context.state === this.STATES.FAILED) {
+      return context;
+    }
+    return await this.executePlan(context);
+  },
+  // --------------------------------------------
+  // Retourne une copie du contexte.
   // --------------------------------------------
   snapshot(context) {
     if (!context || typeof context !== "object") {
       return null;
     }
-    return JSON.parse(JSON.stringify(context));
+    return JSON.parse(
+      JSON.stringify(context)
+    );
   }
 };
 console.log(
   "NexaAgent v" +
     NexaAgent.version +
-    " chargé. Planner local prêt."
+    " chargé. Planner + Executor prêts."
 );
