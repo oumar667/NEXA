@@ -1,51 +1,50 @@
 const NexaAI = {
     async generateResponse(userText, attachment = null) {
-        // Récupération sécurisée de la clé depuis le téléphone
         const apiKey = localStorage.getItem('NEXA_API_KEY');
-        if (!apiKey) throw new Error("Clé API manquante");
+        if (!apiKey) return "🚨 ERREUR : Clé API manquante dans l'iPhone.";
 
         let messages = [
             {
                 role: "system",
-                content: "Tu es NEXA, un assistant IA intelligent, concis et précis. Réponds toujours en français."
-            }
+                content: "Tu es NEXA, un assistant IA intelligent. Résous les calculs et réponds directement."
+            },
+            { role: "user", content: userText }
         ];
-
-        let userContent = userText;
-        
-        // Gestion des fichiers joints s'il y en a
-        if (attachment && attachment.type === 'text') {
-            userContent += `\n\nVoici le contenu du fichier joint (${attachment.name}) :\n${attachment.content}`;
-        }
-
-        messages.push({ role: "user", content: userContent });
 
         try {
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://oumar667.github.io/NEXA/",
+                    "X-Title": "NEXA"
                 },
                 body: JSON.stringify({
-                    // Modèle 100% gratuit et très doué en logique sur OpenRouter
-                    model: "google/gemma-2-9b-it:free", 
+                    model: "google/gemma-2-9b-it:free",
                     messages: messages
                 })
             });
 
+            if (!response.ok) {
+                const errText = await response.text();
+                return `🚨 ERREUR RÉSEAU (${response.status}) : ${errText}`;
+            }
+
             const data = await response.json();
 
-            // Gestion des erreurs renvoyées par OpenRouter
             if (data.error) {
-                return `Erreur du service IA : ${data.error.message}`;
+                return `🚨 ERREUR OPENROUTER : ${data.error.message}`;
+            }
+
+            if (!data.choices || !data.choices[0]) {
+                return `🚨 ERREUR FORMAT : Réponse inattendue de l'IA : ${JSON.stringify(data)}`;
             }
 
             return data.choices[0].message.content;
 
         } catch (error) {
-            console.error("Erreur API :", error);
-            return "Désolé, une erreur de connexion est survenue avec l'IA.";
+            return `🚨 ERREUR SYSTÈME (Safari/JS) : ${error.name} - ${error.message}`;
         }
     }
 };
