@@ -1,19 +1,19 @@
 // ============================================
-// NEXA TOOLS - version 0.5
+// NEXA TOOLS - version 0.6
 // Les capacités de NEXA.
 // Registre d'outils : heure, date, calcul,
-// météo, Wikipédia, tâches, chronomètre.
+// météo, Wikipédia, tâches, chronomètre,
+// lecture de fichiers joints.
 // ============================================
 
 const NexaTools = {
-  version: "0.5",
+  version: "0.6",
 
   // --------------------------------------------
   // LE REGISTRE : la liste des outils disponibles
   // --------------------------------------------
   registry: {},
 
-  // Déclare un outil : nom, description, fonction
   register(name, description, handler) {
     this.registry[name] = {
       name: name,
@@ -22,8 +22,6 @@ const NexaTools = {
     };
   },
 
-  // Lance un outil par son nom.
-  // Renvoie { ok: true, result: ... } ou { ok: false, error: ... }
   async run(name, args) {
     const tool = this.registry[name];
     if (!tool) {
@@ -37,20 +35,16 @@ const NexaTools = {
     }
   },
 
-  // Décrit les outils (utile plus tard pour le modèle IA)
   describe() {
     return Object.values(this.registry).map(function (t) {
       return { name: t.name, description: t.description };
     });
   },
 
-  // Liste des noms d'outils
   list() {
     return Object.keys(this.registry);
   },
 
-  // Enlève accents, majuscules, tirets et apostrophes
-  // pour pouvoir comparer deux textes
   normalize(str) {
     return (str || "")
       .toLowerCase()
@@ -86,18 +80,15 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : les calculs (ex : "12 * 5 + 3")
-  // Renvoie le résultat, ou null si invalide
+  // OUTIL : les calculs
   // --------------------------------------------
   calculate(expression) {
-    // On accepte les symboles × et ÷, et la virgule française
     let expr = expression
       .replace(/×/g, "*")
       .replace(/÷/g, "/")
       .replace(/,/g, ".")
       .trim();
 
-    // Sécurité : on n'autorise que des chiffres et des opérateurs
     if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
       return null;
     }
@@ -105,7 +96,6 @@ const NexaTools = {
     try {
       const result = Function('"use strict"; return (' + expr + ");")();
       if (typeof result === "number" && isFinite(result)) {
-        // On arrondit pour éviter 0.1 + 0.2 = 0.30000000000000004
         return Math.round(result * 1000000) / 1000000;
       }
     } catch (e) {
@@ -116,7 +106,6 @@ const NexaTools = {
 
   // --------------------------------------------
   // OUTIL : la météo (Open-Meteo, gratuit, sans clé)
-  // Renvoie une phrase prête à afficher
   // --------------------------------------------
   weatherCodes: {
     0: "ciel dégagé",
@@ -149,8 +138,6 @@ const NexaTools = {
     99: "orage violent avec grêle"
   },
 
-  // Sépare "Saint Louis en France" en
-  // { city: "Saint Louis", hint: "France" }
   splitPlace(input) {
     const text = (input || "").trim();
 
@@ -172,12 +159,10 @@ const NexaTools = {
     return { city: text, hint: "" };
   },
 
-  // Vérifie si un résultat correspond au pays ou à la région demandés
   placeMatchesHint(place, hint) {
     const h = this.normalize(hint);
     if (!h) return true;
 
-    // Code pays à 2 lettres (ex : "fr")
     if (h.length === 2 && this.normalize(place.country_code) === h) {
       return true;
     }
@@ -198,7 +183,6 @@ const NexaTools = {
     });
   },
 
-  // Cherche des lieux par nom (Open-Meteo)
   async findPlaces(name, count) {
     const url =
       "https://geocoding-api.open-meteo.com/v1/search?name=" +
@@ -220,7 +204,6 @@ const NexaTools = {
     }
 
     try {
-      // 1) On trouve la bonne ville (avec le pays si on le connaît)
       const parts = this.splitPlace(name);
       let place = null;
 
@@ -252,7 +235,6 @@ const NexaTools = {
         return "Je n'ai pas trouvé la ville « " + name + " ».";
       }
 
-      // 2) On demande la météo à ces coordonnées
       const weatherUrl =
         "https://api.open-meteo.com/v1/forecast" +
         "?latitude=" + place.latitude +
@@ -305,7 +287,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : recherche Wikipédia (gratuit, sans clé)
+  // OUTIL : recherche Wikipédia
   // --------------------------------------------
   async searchWikipedia(query) {
     const q = (query || "").trim();
@@ -364,148 +346,3 @@ const NexaTools = {
     } catch (e) {
       return "Impossible de joindre Wikipédia. Vérifiez votre connexion.";
     }
-  },
-
-  // --------------------------------------------
-  // OUTIL : la liste de tâches (gardée dans la Memory)
-  // --------------------------------------------
-  tasksKey: "tasks",
-
-  loadTasks() {
-    if (typeof NexaMemory === "undefined") return null;
-    const list = NexaMemory.recall(this.tasksKey);
-    return Array.isArray(list) ? list : [];
-  },
-
-  saveTasks(list) {
-    if (typeof NexaMemory === "undefined") return false;
-    return NexaMemory.remember(this.tasksKey, list);
-  },
-
-  formatTasks(list) {
-    return list
-      .map(function (t, i) {
-        return (i + 1) + ". " + (t.done ? "✅" : "☐") + " " + t.text;
-      })
-      .join("\n");
-  },
-
-  manageTasks(action, text, number) {
-    const list = this.loadTasks();
-    if (list === null) {
-      return "Ma mémoire n'est pas encore connectée.";
-    }
-
-    if (action === "add") {
-      let t = (text || "").trim().slice(0, 200);
-      if (!t) {
-        return "Quelle tâche voulez-vous ajouter ?";
-      }
-      if (list.length >= 50) {
-        return "Votre liste est pleine (50 tâches). Terminez ou supprimez-en avant d'en ajouter.";
-      }
-      t = t.charAt(0).toUpperCase() + t.slice(1);
-      list.push({
-        text: t,
-        done: false,
-        created: new Date().toISOString()
-      });
-      this.saveTasks(list);
-      return "C'est ajouté : « " + t + " ». Vous avez " + list.length + " tâche(s) dans votre liste.";
-    }
-
-    if (action === "list") {
-      if (list.length === 0) {
-        return "Votre liste est vide. Dites par exemple : « Ajoute une tâche : appeler le médecin ».";
-      }
-      const remaining = list.filter(function (t) {
-        return !t.done;
-      }).length;
-      return (
-        "Vos tâches (" + remaining + " à faire sur " + list.length + ") :\n" +
-        this.formatTasks(list)
-      );
-    }
-
-    if (action === "clear") {
-      const count = list.length;
-      this.saveTasks([]);
-      return "C'est fait. J'ai vidé votre liste (" + count + " tâche(s) supprimée(s)).";
-    }
-
-    if (action === "done" || action === "delete") {
-      const n = Number(number);
-      if (!Number.isInteger(n) || n < 1 || n > list.length) {
-        return "Je ne trouve pas la tâche " + number + ". Écrivez « Mes tâches » pour voir la liste.";
-      }
-
-      const task = list[n - 1];
-
-      if (action === "done") {
-        if (task.done) {
-          return "La tâche " + n + " est déjà terminée : « " + task.text + " ».";
-        }
-        task.done = true;
-        this.saveTasks(list);
-        return "Bien joué ! Tâche " + n + " terminée : « " + task.text + " ».";
-      }
-
-      list.splice(n - 1, 1);
-      this.saveTasks(list);
-      return "C'est supprimé : « " + task.text + " ». Il reste " + list.length + " tâche(s).";
-    }
-
-    return "Je ne sais pas faire cette action sur la liste de tâches.";
-  },
-
-  // --------------------------------------------
-  // OUTIL : chronomètre (affichage HTML interactif)
-  // Les boutons appellent startChrono/stopChrono/resetChrono,
-  // déjà définis dans index.html.
-  // --------------------------------------------
-  createChronometer() {
-    const id = "chrono_" + Date.now();
-    return (
-      '<div style="background:rgba(255,255,255,0.05); padding:12px 16px; border-radius:14px; border:1px solid rgba(255,255,255,0.1); margin-top:8px; display:inline-block; text-align:center;">' +
-      '⏱️ <b>Chronomètre NEXA</b><br>' +
-      '<span id="' + id + '" style="font-size:1.4rem; font-weight:bold; font-family:monospace; color:#a78bfa;">00:00:00</span><br>' +
-      '<div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">' +
-      '<button onclick="startChrono(\'' + id + '\')" style="padding:4px 10px; background:#4ade80; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Start</button>' +
-      '<button onclick="stopChrono(\'' + id + '\')" style="padding:4px 10px; background:#f87171; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Stop</button>' +
-      '<button onclick="resetChrono(\'' + id + '\')" style="padding:4px 10px; background:#9ca3af; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">Reset</button>' +
-      '</div>' +
-      '</div>'
-    );
-  }
-};
-
-// --------------------------------------------
-// On déclare les outils dans le registre
-// --------------------------------------------
-NexaTools.register("heure", "Donne l'heure actuelle.", function () {
-  return NexaTools.getTime();
-});
-
-NexaTools.register("date", "Donne la date d'aujourd'hui.", function () {
-  return NexaTools.getDate();
-});
-
-NexaTools.register("calcul", "Fait un calcul mathématique (argument : expression).", function (args) {
-  return NexaTools.calculate(args.expression || "");
-});
-
-NexaTools.register("meteo", "Donne la météo d'une ville (argument : city).", function (args) {
-  return NexaTools.getWeather(args.city || "");
-});
-
-NexaTools.register("wikipedia", "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).", function (args) {
-  return NexaTools.searchWikipedia(args.query || "");
-});
-
-NexaTools.register("taches", "Gère la liste de tâches (arguments : action = add, list, done, delete ou clear ; text ; number).", function (args) {
-  return NexaTools.manageTasks(args.action, args.text, args.number);
-});
-
-NexaTools.register("chronometre", "Affiche un chronomètre interactif (Start/Stop/Reset).", function () {
-  return NexaTools.createChronometer();
-});
