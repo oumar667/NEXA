@@ -15,7 +15,6 @@
             --accent-gradient: linear-gradient(135deg, #a78bfa 0%, #60a5fa 50%, #34d399 100%);
             --accent-solid: #818cf8;
         }
-
         * {
             box-sizing: border-box;
             margin: 0;
@@ -23,7 +22,6 @@
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
-
         body {
             background-color: var(--bg-color);
             color: var(--text-main);
@@ -34,7 +32,6 @@
             overflow: hidden;
             background-image: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
         }
-
         header {
             display: flex;
             justify-content: space-between;
@@ -46,13 +43,11 @@
             border-bottom: 1px solid var(--border-color);
             z-index: 10;
         }
-
         .header-left, .header-right {
             display: flex;
             align-items: center;
             gap: 8px;
         }
-
         .icon-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border-color);
@@ -67,7 +62,6 @@
             font-size: 1rem;
             transition: background 0.2s;
         }
-
         .icon-btn:hover {
             background: rgba(255, 255, 255, 0.1);
         }
@@ -83,7 +77,6 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
         .status-badge {
             font-size: 0.65rem;
             color: var(--text-secondary);
@@ -93,7 +86,6 @@
             border: 1px solid var(--border-color);
             font-weight: 600;
         }
-
         /* Sidebar latérale */
         #sidebar {
             position: fixed;
@@ -109,7 +101,6 @@
             flex-direction: column;
             padding: 20px;
         }
-
         #sidebar.open {
             left: 0;
         }
@@ -130,7 +121,6 @@
             flex-direction: column;
             gap: 8px;
         }
-
         .history-item {
             background: rgba(255, 255, 255, 0.03);
             padding: 10px 14px;
@@ -144,7 +134,6 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-
         .history-item:hover {
             background: rgba(255, 255, 255, 0.07);
         }
@@ -164,7 +153,6 @@
         .overlay.active {
             display: block;
         }
-
         #chat-container {
             flex: 1;
             overflow-y: auto;
@@ -174,7 +162,6 @@
             gap: 24px;
             scroll-behavior: smooth;
         }
-
         .welcome-screen {
             display: flex;
             flex-direction: column;
@@ -188,7 +175,6 @@
             padding: 20px;
             animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
         .welcome-icon {
             font-size: 3rem;
             margin-bottom: 16px;
@@ -204,7 +190,6 @@
             margin-bottom: 8px;
             letter-spacing: -1px;
         }
-
         .welcome-screen p {
             color: var(--text-secondary);
             font-size: 1rem;
@@ -220,7 +205,6 @@
             word-wrap: break-word;
             animation: messagePop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-
         @keyframes messagePop {
             from { opacity: 0; transform: translateY(10px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }
@@ -230,7 +214,6 @@
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         .user-message {
             background-color: var(--surface-color);
             color: var(--text-main);
@@ -238,7 +221,6 @@
             border-bottom-right-radius: 6px;
             border: 1px solid var(--border-color);
         }
-
         .ai-message {
             background-color: rgba(255, 255, 255, 0.02);
             color: var(--text-main);
@@ -248,7 +230,6 @@
             width: 100%;
             max-width: 100%;
         }
-
         .input-area {
             padding: 16px 20px 24px 20px;
             background: linear-gradient(to top, var(--bg-color) 80%, transparent);
@@ -256,7 +237,6 @@
             flex-direction: column;
             gap: 10px;
         }
-
         .input-box-wrapper {
             display: flex;
             align-items: center;
@@ -267,12 +247,10 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             transition: all 0.3s ease;
         }
-
         .input-box-wrapper:focus-within {
             border-color: rgba(129, 140, 248, 0.5);
             box-shadow: 0 8px 32px rgba(129, 140, 248, 0.15);
         }
-
         #file-btn {
             background: none;
             border: none;
@@ -287,7 +265,6 @@
             justify-content: center;
             transition: all 0.2s;
         }
-
         #file-btn:hover {
             background-color: rgba(255, 255, 255, 0.08);
             color: var(--text-main);
@@ -304,11 +281,9 @@
             resize: none;
             max-height: 120px;
         }
-
         #user-input::placeholder {
             color: var(--text-secondary);
         }
-
         #send-btn {
             background: var(--accent-gradient);
             color: #fff;
@@ -324,7 +299,6 @@
             box-shadow: 0 4px 12px rgba(129, 140, 248, 0.3);
             transition: transform 0.2s, opacity 0.2s;
         }
-
         #send-btn:active {
             transform: scale(0.92);
         }
@@ -341,9 +315,7 @@
         }
     </style>
 </head>
-
 <body>
-
     <!-- Overlay pour la sidebar -->
     <div id="overlay" class="overlay"></div>
 
@@ -353,29 +325,23 @@
             <span>Historique</span>
             <button class="icon-btn" id="close-sidebar">✕</button>
         </div>
-
         <div id="history-list" class="sidebar-content">
             <!-- Les discussions passées s'afficheront ici -->
         </div>
     </div>
-
     <header>
         <div class="header-left">
             <button class="icon-btn" id="menu-btn" title="Menu">☰</button>
-
             <div class="logo-area">
                 <span>✨</span> NEXA
             </div>
         </div>
-
         <div class="header-right">
             <div id="status" class="status-badge">ONLINE</div>
-
             <button class="icon-btn" id="new-chat-btn" title="Nouveau chat">✏️</button>
             <button class="icon-btn" id="options-btn" title="Options">⋯</button>
         </div>
     </header>
-
     <div id="chat-container">
         <div class="welcome-screen">
             <div class="welcome-icon">✨</div>
@@ -383,26 +349,12 @@
             <p>Comment puis-je vous aider aujourd'hui ?</p>
         </div>
     </div>
-
     <div class="input-area">
         <div id="attachment-preview" class="attachment-preview"></div>
-
         <div class="input-box-wrapper">
             <button id="file-btn" title="Joindre un fichier">+</button>
-
-            <input
-                type="file"
-                id="file-input"
-                style="display: none;"
-                accept="image/*,.txt,.pdf,.json,.js,.html,.css"
-            >
-
-            <textarea
-                id="user-input"
-                rows="1"
-                placeholder="Posez une question..."
-            ></textarea>
-
+            <input type="file" id="file-input" style="display: none;" accept="image/*,.txt,.pdf,.json,.js,.html,.css">
+            <textarea id="user-input" rows="1" placeholder="Posez une question..."></textarea>
             <button id="send-btn" title="Envoyer">↑</button>
         </div>
     </div>
@@ -411,11 +363,7 @@
     <script src="memory.js?v=2.0"></script>
     <script src="tools.js?v=2.0"></script>
     <script src="ai.js?v=2.0"></script>
-
-    <!-- NEXA AGENT -->
     <script src="agent.js?v=0.1"></script>
-
-    <!-- Brain principal -->
     <script src="brain.js?v=2.0"></script>
 
     <script>
@@ -424,28 +372,19 @@
 
         function startChrono(id) {
             if (window.chronoTimers[id]) return;
-
             let el = document.getElementById(id);
             if (!el) return;
-
             let [h, m, s] = el.textContent.split(':').map(Number);
             let totalSeconds = h * 3600 + m * 60 + s;
-
             window.chronoTimers[id] = setInterval(() => {
                 totalSeconds++;
-
                 let hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
                 let mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
                 let ss = String(totalSeconds % 60).padStart(2, '0');
-
                 const target = document.getElementById(id);
-
-                if (target) {
-                    target.textContent = `${hh}:${mm}:${ss}`;
-                }
+                if (target) target.textContent = `${hh}:${mm}:${ss}`;
             }, 1000);
         }
-
         function stopChrono(id) {
             clearInterval(window.chronoTimers[id]);
             window.chronoTimers[id] = null;
@@ -453,77 +392,44 @@
 
         function resetChrono(id) {
             stopChrono(id);
-
             const el = document.getElementById(id);
-
-            if (el) {
-                el.textContent = "00:00:00";
-            }
+            if (el) el.textContent = "00:00:00";
         }
-
         // Gestion de l'historique dans le localStorage
         function getHistory() {
             try {
                 return JSON.parse(localStorage.getItem('nexa_history')) || [];
-            } catch(e) {
-                return [];
-            }
+            } catch(e) { return []; }
         }
-
         function saveToHistory(text) {
-            // Protection : si l'enregistrement échoue
-            // (mémoire pleine, navigation privée...),
-            // on ne bloque pas l'envoi du message.
+            // Protection : si l'enregistrement échoue (mémoire pleine,
+            // navigation privée...), on ne bloque pas l'envoi du message.
             if (!text) return;
-
             try {
                 let history = getHistory();
-
                 history.unshift(text);
-
-                if (history.length > 20) {
-                    history.pop();
-                }
-
-                localStorage.setItem(
-                    'nexa_history',
-                    JSON.stringify(history)
-                );
-
+                if (history.length > 20) history.pop(); // Garde les 20 derniers
+                localStorage.setItem('nexa_history', JSON.stringify(history));
                 renderHistory();
-
             } catch (e) {
                 // On continue quand même sans bloquer l'envoi
             }
         }
-
         function renderHistory() {
             const historyList = document.getElementById('history-list');
             const history = getHistory();
-
             if (history.length === 0) {
-                historyList.innerHTML =
-                    '<p style="color:var(--text-secondary); font-size:0.85rem; text-align:center; margin-top:20px;">Aucun historique</p>';
-
+                historyList.innerHTML = '<p style="color:var(--text-secondary); font-size:0.85rem; text-align:center; margin-top:20px;">Aucun historique</p>';
                 return;
             }
-
-            historyList.innerHTML = history
-                .map(item =>
-                    `<div class="history-item" onclick="loadHistoryItem('${item.replace(/'/g, "\\'")}')">${item}</div>`
-                )
-                .join('');
+            historyList.innerHTML = history.map(item => `<div class="history-item" onclick="loadHistoryItem('${item.replace(/'/g, "\\'")}')">${item}</div>`).join('');
         }
-
         function loadHistoryItem(text) {
             userInput.value = text;
-
             sidebar.classList.remove('open');
             overlay.classList.remove('active');
-
             userInput.focus();
         }
-
         // Gestion de la Sidebar et des boutons
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('overlay');
@@ -531,10 +437,8 @@
         const closeSidebar = document.getElementById('close-sidebar');
         const newChatBtn = document.getElementById('new-chat-btn');
         const optionsBtn = document.getElementById('options-btn');
-
         menuBtn.addEventListener('click', () => {
             renderHistory();
-
             sidebar.classList.add('open');
             overlay.classList.add('active');
         });
@@ -548,7 +452,6 @@
             sidebar.classList.remove('open');
             overlay.classList.remove('active');
         });
-
         newChatBtn.addEventListener('click', () => {
             chatContainer.innerHTML = `
                 <div class="welcome-screen">
@@ -557,14 +460,12 @@
                     <p>Comment puis-je vous aider aujourd'hui ?</p>
                 </div>
             `;
-
             isFirstMessage = true;
         });
 
         optionsBtn.addEventListener('click', () => {
             alert("NEXA v1.1 - Mode souverain local actif.");
         });
-
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -572,7 +473,6 @@
         const fileInput = document.getElementById('file-input');
         const attachmentPreview = document.getElementById('attachment-preview');
         const statusBadge = document.getElementById('status');
-
         let currentAttachment = null;
         let isFirstMessage = true;
 
@@ -580,11 +480,8 @@
 
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
-
             if (!file) return;
-
             statusBadge.textContent = "CHARGEMENT";
-
             const result = await NexaTools.processLocalFile(file);
 
             if (result.error) {
@@ -592,12 +489,9 @@
                 statusBadge.textContent = "ONLINE";
                 return;
             }
-
             currentAttachment = result;
-
             attachmentPreview.textContent = `📎 ${result.name}`;
             attachmentPreview.style.display = "inline-block";
-
             statusBadge.textContent = "FICHIER PRÊT";
         });
 
@@ -605,10 +499,8 @@
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
         });
-
         async function handleSend() {
             const text = userInput.value.trim();
-
             if (!text && !currentAttachment) return;
 
             if (isFirstMessage) {
@@ -616,100 +508,51 @@
                 isFirstMessage = false;
             }
 
-            // Enregistrer dans l'historique local
-            if (text) {
-                saveToHistory(text);
-            }
-
+            // Enregistrer dans l'historique local (protégé, ne bloque plus l'envoi)
+            if (text) saveToHistory(text);
             const userBubble = document.createElement('div');
-
             userBubble.className = 'message user-message';
-
-            userBubble.textContent =
-                text +
-                (currentAttachment
-                    ? ` [📎 ${currentAttachment.name}]`
-                    : '');
-
+            userBubble.textContent = text + (currentAttachment ? ` [📎 ${currentAttachment.name}]` : '');
             chatContainer.appendChild(userBubble);
-
             const sentAttachment = currentAttachment;
 
             userInput.value = '';
             userInput.style.height = 'auto';
-
             currentAttachment = null;
-
             attachmentPreview.style.display = 'none';
             attachmentPreview.textContent = '';
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
             statusBadge.textContent = "RÉFLEXION";
-
             const aiBubble = document.createElement('div');
-
             aiBubble.className = 'message ai-message';
             aiBubble.textContent = "Nexa analyse...";
-
             chatContainer.appendChild(aiBubble);
-
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
             try {
-                const response =
-                    await NexaBrain.think(
-                        text,
-                        sentAttachment
-                    );
-
+                const response = await NexaBrain.think(text, sentAttachment);
                 aiBubble.innerHTML = formatResponse(response);
-
             } catch (err) {
-                aiBubble.textContent =
-                    "Une erreur est survenue dans mon Brain.";
+                aiBubble.textContent = "Une erreur est survenue dans mon Brain.";
             }
 
             statusBadge.textContent = "ONLINE";
-
-            chatContainer.scrollTop =
-                chatContainer.scrollHeight;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-
-        // Nettoyage et formatage propre du texte
-        // Convertit le Markdown ** en <b>
+        // Nettoyage et formatage propre du texte (convertit le Markdown ** en <b>)
         function formatResponse(text) {
             if (!text) return "";
-
             return text
-                .replace(
-                    /\*\*(.*?)\*\*/g,
-                    '<b>$1</b>'
-                )
-                .replace(
-                    /\n/g,
-                    '<br>'
-                );
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Transforme **texte** en gras propre
+                .replace(/\n/g, '<br>');                // Conserve les sauts de ligne
         }
-
-        sendBtn.addEventListener(
-            'click',
-            handleSend
-        );
-
-        userInput.addEventListener(
-            'keydown',
-            (e) => {
-                if (
-                    e.key === 'Enter' &&
-                    !e.shiftKey
-                ) {
-                    e.preventDefault();
-                    handleSend();
-                }
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
             }
-        );
+        });
     </script>
-
 </body>
 </html>
