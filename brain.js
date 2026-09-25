@@ -1,11 +1,11 @@
 // ============================================
-// NEXA BRAIN - version 0.8
+// NEXA BRAIN - version 0.9
 // L'orchestrateur central : analyse l'intention
-// et déléguer aux Tools ou à l'IA.
+// et délégue aux Tools ou à l'IA.
 // ============================================
 
 const NexaBrain = {
-  version: "0.8",
+  version: "0.9",
 
   async think(text, attachment) {
     const rawText = text || "";
@@ -70,7 +70,7 @@ const NexaBrain = {
       try {
         return await NexaAI.ask(rawText);
       } catch (e) {
-        return "J'ai tenté de contacter mon modèle d'IA, mais une erreur est survenue.";
+        return "J'ai tenté de contacter mon modèle d'IA, mais une erreur est survenue : " + e.message;
       }
     }
 
