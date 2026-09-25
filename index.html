@@ -390,10 +390,10 @@
     </div>
 
     <!-- Scripts avec versioning -->
-    <script src="memory.js?v=1.1"></script>
-    <script src="tools.js?v=1.1"></script>
-    <script src="ai.js?v=1.1"></script>
-    <script src="brain.js?v=1.1"></script>
+    <script src="memory.js?v=2.0"></script>
+    <script src="tools.js?v=2.0"></script>
+    <script src="ai.js?v=2.0"></script>
+    <script src="brain.js?v=2.0"></script>
 
     <script>
         // Logique globale du Chronomètre
@@ -469,132 +469,4 @@
 
         menuBtn.addEventListener('click', () => {
             renderHistory();
-            sidebar.classList.add('open');
-            overlay.classList.add('active');
-        });
-
-        closeSidebar.addEventListener('click', () => {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-        });
-
-        overlay.addEventListener('click', () => {
-            sidebar.classList.remove('open');
-            overlay.classList.remove('active');
-        });
-
-        newChatBtn.addEventListener('click', () => {
-            chatContainer.innerHTML = `
-                <div class="welcome-screen">
-                    <div class="welcome-icon">✨</div>
-                    <h1>Bonjour.</h1>
-                    <p>Comment puis-je vous aider aujourd'hui ?</p>
-                </div>
-            `;
-            isFirstMessage = true;
-        });
-
-        optionsBtn.addEventListener('click', () => {
-            alert("NEXA v1.1 - Mode souverain local actif.");
-        });
-
-        const chatContainer = document.getElementById('chat-container');
-        const userInput = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-        const fileBtn = document.getElementById('file-btn');
-        const fileInput = document.getElementById('file-input');
-        const attachmentPreview = document.getElementById('attachment-preview');
-        const statusBadge = document.getElementById('status');
-
-        let currentAttachment = null;
-        let isFirstMessage = true;
-
-        fileBtn.addEventListener('click', () => fileInput.click());
-
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            statusBadge.textContent = "CHARGEMENT";
-            const result = await NexaTools.processLocalFile(file);
-            
-            if (result.error) {
-                alert(result.error);
-                statusBadge.textContent = "ONLINE";
-                return;
-            }
-
-            currentAttachment = result;
-            attachmentPreview.textContent = `📎 ${result.name}`;
-            attachmentPreview.style.display = "inline-block";
-            statusBadge.textContent = "FICHIER PRÊT";
-        });
-
-        userInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
-
-        async function handleSend() {
-            const text = userInput.value.trim();
-            if (!text && !currentAttachment) return;
-
-            if (isFirstMessage) {
-                chatContainer.innerHTML = '';
-                isFirstMessage = false;
-            }
-
-            // Enregistrer dans l'historique local
-            if (text) saveToHistory(text);
-
-            const userBubble = document.createElement('div');
-            userBubble.className = 'message user-message';
-            userBubble.textContent = text + (currentAttachment ? ` [📎 ${currentAttachment.name}]` : '');
-            chatContainer.appendChild(userBubble);
-
-            const sentAttachment = currentAttachment;
-            
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            currentAttachment = null;
-            attachmentPreview.style.display = 'none';
-            attachmentPreview.textContent = '';
-            
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            statusBadge.textContent = "RÉFLEXION";
-            const aiBubble = document.createElement('div');
-            aiBubble.className = 'message ai-message';
-            aiBubble.textContent = "Nexa analyse...";
-            chatContainer.appendChild(aiBubble);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            try {
-                const response = await NexaBrain.think(text, sentAttachment);
-                aiBubble.innerHTML = formatResponse(response);
-            } catch (err) {
-                aiBubble.textContent = "Une erreur est survenue dans mon Brain.";
-            }
-
-            statusBadge.textContent = "ONLINE";
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        // Nettoyage et formatage propre du texte (convertit le Markdown ** en <b>)
-        function formatResponse(text) {
-            if (!text) return "";
-            return text
-                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Transforme **texte** en gras propre
-                .replace(/\n/g, '<br>');                // Conserve les sauts de ligne
-        }
-
-        sendBtn.addEventListener('click', handleSend);
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-            }
-        });
-    </script>
-</body>
-</html>
+            s
