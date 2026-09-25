@@ -1,81 +1,80 @@
 // ============================================
-// NEXA BRAIN - Orchestrateur Principal (Sécurisé)
-// Routage intelligent : Outils Locaux ⇄ IA
+// NEXA BRAIN - version 0.8
+// L'orchestrateur central : analyse l'intention
+// et déléguer aux Tools ou à l'IA.
 // ============================================
 
 const NexaBrain = {
-    // La clé est lue de manière sécurisée depuis le stockage du navigateur
-    get API_KEY() {
-        return localStorage.getItem('NEXA_API_KEY') || "";
-    },
+  version: "0.8",
 
-    async think(userText, attachment = null) {
-        if (!userText && !attachment) return "Veuillez formuler une requête.";
+  async think(text, attachment) {
+    const rawText = text || "";
+    const query = rawText.toLowerCase().trim();
+    const norm = typeof NexaTools !== "undefined" ? NexaTools.normalize(query) : query;
 
-        const textLower = userText.toLowerCase().trim();
-
-        // ==========================================
-        // 1. OUTILS LOCAUX (Priorité, Vitesse, Hors-ligne)
-        // ==========================================
-
-        if (textLower === "bonjour" || textLower === "routine") {
-            return NexaTools.getMorningRoutine();
-        }
-
-        if (textLower === "chrono" || textLower === "chronomètre") {
-            return NexaTools.showChronometer();
-        }
-
-        if (textLower.includes("quelle heure") || textLower === "date") {
-            return NexaTools.getTimeAndDate();
-        }
-
-        if (textLower.startsWith("météo")) {
-            const city = textLower.replace("météo", "").trim() || "Paris";
-            return await NexaTools.getWeather(city);
-        }
-
-        if (textLower.startsWith("wiki ") || textLower.startsWith("qui est ") || textLower.startsWith("qu'est-ce que ")) {
-            const query = textLower.replace(/wiki |qui est |qu'est-ce que |c'est quoi /g, "").trim();
-            if (query) {
-                return await NexaTools.searchWikipedia(query);
-            }
-        }
-
-        // ==========================================
-        // 2. GESTION DE LA MÉMOIRE (Tâches locales)
-        // ==========================================
-
-        if (textLower.startsWith("ajoute la tâche") || textLower.startsWith("rappel")) {
-            const task = textLower.replace(/ajoute la tâche|rappel/g, "").trim();
-            if (task && typeof NexaMemory !== "undefined") {
-                NexaMemory.addTask(task);
-                return `Tâche ajoutée avec succès : **${task}**`;
-            }
-        }
-
-        if (textLower.includes("mes tâches") || textLower.includes("liste des tâches")) {
-            if (typeof NexaMemory !== "undefined") {
-                const tasks = NexaMemory.getTasks();
-                if (tasks.length === 0) return "Tu n'as aucune tâche en cours.";
-                return "**Voici tes tâches :**\n" + tasks.map(t => `- ${t.text}`).join("\n");
-            }
-        }
-
-        // ==========================================
-        // 3. RÉFLEXION PROFONDE (Appel à l'IA OpenRouter)
-        // ==========================================
-        
-        // Sécurité : Si la clé n'a pas été rentrée, on bloque l'appel et on prévient l'utilisateur
-        if (!this.API_KEY) {
-            return "🔒 **Clé API manquante.**\nClique sur le bouton Options (⋯) en haut à droite pour ajouter ta clé OpenRouter en toute sécurité. Elle restera sur ce téléphone.";
-        }
-
-        try {
-            return await NexaAI.generateResponse(userText, attachment);
-        } catch (error) {
-            console.error("Erreur Brain -> AI :", error);
-            return "Mon réseau neuronal est actuellement inaccessible. Vérifiez votre connexion.";
-        }
+    // 1. Gestion des fichiers joints
+    if (attachment) {
+      return `J'ai bien reçu votre fichier « ${attachment.name} ». C'est enregistré dans le contexte !`;
     }
+
+    // 2. Intention : Routine / Bonjour / Point du jour
+    if (norm.includes("bonjour") || norm.includes("routine") || norm.includes("point du jour")) {
+      const res = await NexaTools.run("routine", {});
+      if (res.ok) return res.result;
+    }
+
+    // 3. Intention : Chronomètre
+    if (norm.includes("chrono") || norm.includes("chronometre") || norm.includes("timer")) {
+      const res = await NexaTools.run("chronometre", {});
+      if (res.ok) return res.result;
+    }
+
+    // 4. Intention : Heure
+    if (norm.includes("heure")) {
+      const res = await NexaTools.run("heure", {});
+      if (res.ok) return "Il est actuellement " + res.result + ".";
+    }
+
+    // 5. Intention : Date
+    if (norm.includes("date") || norm.includes("jour")) {
+      const res = await NexaTools.run("date", {});
+      if (res.ok) return "Nous sommes le " + res.result + ".";
+    }
+
+    // 6. Intention : Météo
+    if (norm.includes("meteo") || norm.includes("temps")) {
+      let city = "Paris";
+      const match = rawText.match(/(?:meteo|temps)\s+(?:a|à|sur|pour)?\s*(.+)/i);
+      if (match) city = match[1].trim();
+      const res = await NexaTools.run("meteo", { city: city });
+      if (res.ok) return res.result;
+    }
+
+    // 7. Intention : Wikipédia
+    if (norm.startsWith("wiki") || norm.startsWith("cherche") || norm.startsWith("qu est ce que")) {
+      let q = rawText.replace(/^(wiki|cherche|qu'est-ce que|qu est ce que)\s*/i, "").trim();
+      const res = await NexaTools.run("wikipedia", { query: q });
+      if (res.ok) return res.result;
+    }
+
+    // 8. Intention : Calculs mathématiques
+    if (/^[0-9+\-*/().\s×÷,]+$/.test(rawText) && /[+\-*/×÷]/.test(rawText)) {
+      const res = await NexaTools.run("calcul", { expression: rawText });
+      if (res.ok && res.result !== null) {
+        return "Résultat : " + res.result;
+      }
+    }
+
+    // 9. Relais vers l'IA Cloud (OpenRouter) si disponible
+    if (typeof NexaAI !== "undefined" && NexaAI.ask) {
+      try {
+        return await NexaAI.ask(rawText);
+      } catch (e) {
+        return "J'ai tenté de contacter mon modèle d'IA, mais une erreur est survenue.";
+      }
+    }
+
+    // 10. Fallback par défaut
+    return "J'ai bien compris : « " + rawText + " ». Que souhaitez-vous faire avec cela ?";
+  }
 };
