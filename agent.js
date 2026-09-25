@@ -1,6 +1,6 @@
 // ============================================
-// NEXA AGENT - version 0.3
-// Planner + Executor
+// NEXA AGENT - version 0.4
+// Planner + Executor + Verifier + Finalizer
 //
 // Rôle actuel :
 // - créer un contexte d'exécution
@@ -10,15 +10,17 @@
 // - suivre les étapes
 // - exécuter les Tools
 // - stocker les résultats
+// - vérifier les résultats
+// - construire une réponse finale
 // - gérer l'état de l'exécution
 //
 // IMPORTANT :
-// Cette version ajoute l'Executor.
+// Cette version ajoute le Verifier + Finalizer.
 // Elle n'est pas encore connectée automatiquement
 // au Brain pour les exécutions multi-étapes.
 // ============================================
 const NexaAgent = {
-  version: "0.3",
+  version: "0.4",
   MAX_STEPS: 10,
   STATES: {
     IDLE: "idle",
@@ -392,10 +394,6 @@ const NexaAgent = {
   // ============================================
   // --------------------------------------------
   // Exécute un outil NEXA.
-  //
-  // Cette fonction ne connaît pas les détails
-  // internes des Tools.
-  // Elle passe simplement par NexaTools.run().
   // --------------------------------------------
   async executeTool(step) {
     if (
@@ -437,14 +435,6 @@ const NexaAgent = {
   },
   // --------------------------------------------
   // Exécute le plan étape par étape.
-  //
-  // Pour cette version :
-  // - les étapes possédant un Tool sont exécutées ;
-  // - les étapes sans Tool restent en attente.
-  //
-  // C'est volontaire :
-  // l'étape "Comparer..." nécessitera le futur
-  // Verifier / Finalizer.
   // --------------------------------------------
   async executePlan(context) {
     const validation = this.validateContext(context);
@@ -454,7 +444,10 @@ const NexaAgent = {
       context.finishedAt = Date.now();
       return context;
     }
-    this.setState(context, this.STATES.EXECUTING);
+    this.setState(
+      context,
+      this.STATES.EXECUTING
+    );
     for (
       let index = 0;
       index < context.plan.length;
@@ -462,12 +455,11 @@ const NexaAgent = {
     ) {
       const step = context.plan[index];
       context.currentStep = index;
-      // Étape déjà terminée : on ne la rejoue pas.
       if (step.status === "completed") {
         continue;
       }
-      // Une étape sans Tool ne peut pas encore être
-      // exécutée automatiquement.
+      // Une étape sans Tool est traitée
+      // par le Verifier / Finalizer.
       if (!step.tool) {
         break;
       }
@@ -493,16 +485,259 @@ const NexaAgent = {
         result.result
       );
     }
-    // Si toutes les étapes sont terminées,
-    // l'exécution peut être considérée comme complète.
+    return context;
+  },
+  // ============================================
+  // VERIFIER
+  // ============================================
+  // --------------------------------------------
+  // Vérifie qu'un résultat individuel est valide.
+  // --------------------------------------------
+  verifyResult(result) {
+    if (!result) {
+      return {
+        ok: false,
+        error: "Aucun résultat fourni."
+      };
+    }
+    if (result.ok === false) {
+      return {
+        ok: false,
+        error: result.error || "Le résultat indique une erreur."
+      };
+    }
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        result,
+        "result"
+      )
+    ) {
+      return {
+        ok: false,
+        error: "Le résultat ne contient aucune donnée."
+      };
+    }
+    if (
+      result.result === null ||
+      result.result === undefined ||
+      result.result === ""
+    ) {
+      return {
+        ok: false,
+        error: "Le Tool a retourné une donnée vide."
+      };
+    }
+    return {
+      ok: true,
+      result: result.result
+    };
+  },
+  // --------------------------------------------
+  // Vérifie les résultats d'une exécution.
+  // --------------------------------------------
+  verifyExecution(context) {
+    if (!context || typeof context !== "object") {
+      return {
+        ok: false,
+        error: "Contexte Agent invalide."
+      };
+    }
+    if (!Array.isArray(context.results)) {
+      return {
+        ok: false,
+        error: "Les résultats Agent sont invalides."
+      };
+    }
+    const failedResults = context.results.filter(
+      function (entry) {
+        return entry.ok === false;
+      }
+    );
+    if (failedResults.length > 0) {
+      return {
+        ok: false,
+        error:
+          failedResults[0].error ||
+          "Une étape de l'exécution a échoué."
+      };
+    }
+    const completedSteps = context.plan.filter(
+      function (step) {
+        return step.status === "completed";
+      }
+    );
+    if (completedSteps.length === 0) {
+      return {
+        ok: false,
+        error: "Aucun résultat exploitable n'a été obtenu."
+      };
+    }
+    // Toutes les étapes possédant un Tool doivent
+    // avoir un résultat valide.
+    for (const step of completedSteps) {
+      if (!step.tool) {
+        continue;
+      }
+      const matchingResult = context.results.find(
+        function (entry) {
+          return entry.stepId === step.id;
+        }
+      );
+      const verification =
+        this.verifyResult(matchingResult);
+      if (!verification.ok) {
+        return {
+          ok: false,
+          error:
+            "Résultat invalide pour l'étape " +
+            step.id +
+            " : " +
+            verification.error
+        };
+      }
+    }
+    return {
+      ok: true,
+      completedSteps: completedSteps.length,
+      totalResults: context.results.length
+    };
+  },
+  // ============================================
+  // FINALIZER
+  // ============================================
+  // --------------------------------------------
+  // Convertit une donnée en texte sans
+  // inventer sa structure.
+  // --------------------------------------------
+  formatResult(result) {
+    if (
+      result === null ||
+      result === undefined
+    ) {
+      return "";
+    }
+    if (typeof result === "string") {
+      return result;
+    }
+    if (
+      typeof result === "number" ||
+      typeof result === "boolean"
+    ) {
+      return String(result);
+    }
+    try {
+      return JSON.stringify(
+        result,
+        null,
+        2
+      );
+    } catch (error) {
+      return String(result);
+    }
+  },
+  // --------------------------------------------
+  // Construit une réponse finale à partir
+  // des résultats réellement obtenus.
+  //
+  // Cette version ne prétend pas encore
+  // comprendre sémantiquement chaque Tool.
+  // --------------------------------------------
+  buildFinalAnswer(context) {
+    if (!context || !Array.isArray(context.results)) {
+      return null;
+    }
+    const successfulResults =
+      context.results.filter(
+        function (entry) {
+          return (
+            entry.ok !== false &&
+            entry.result !== null &&
+            entry.result !== undefined
+          );
+        }
+      );
+    if (successfulResults.length === 0) {
+      return null;
+    }
+    // Cas d'un seul résultat.
+    if (successfulResults.length === 1) {
+      return this.formatResult(
+        successfulResults[0].result
+      );
+    }
+    // Plusieurs résultats :
+    // on les conserve tous dans l'ordre
+    // d'exécution afin que la prochaine couche
+    // puisse les interpréter.
+    const lines = successfulResults.map(
+      function (entry, index) {
+        return (
+          "Résultat " +
+          (index + 1) +
+          " : " +
+          this.formatResult(entry.result)
+        );
+      }.bind(this)
+    );
+    return lines.join("\n\n");
+  },
+  // --------------------------------------------
+  // Vérifie puis finalise l'exécution.
+  // --------------------------------------------
+  async verifyAndFinalize(context) {
+    this.setState(
+      context,
+      this.STATES.VERIFYING
+    );
+    const verification =
+      this.verifyExecution(context);
+    if (!verification.ok) {
+      context.error = verification.error;
+      this.setState(
+        context,
+        this.STATES.FAILED
+      );
+      return context;
+    }
+    const finalAnswer =
+      this.buildFinalAnswer(context);
+    if (!finalAnswer) {
+      context.error =
+        "Impossible de construire une réponse finale.";
+      this.setState(
+        context,
+        this.STATES.FAILED
+      );
+      return context;
+    }
+    context.finalAnswer = finalAnswer;
+    // Le plan peut contenir une dernière étape
+    // sans Tool, par exemple :
+    // "Comparer les résultats météo obtenus".
+    //
+    // Elle n'est pas marquée completed ici tant
+    // qu'une logique spécialisée n'existe pas.
+    //
+    // On considère donc cette version comme une
+    // validation des résultats exécutés, pas encore
+    // comme la résolution sémantique complète
+    // de la demande.
     if (this.isPlanComplete(context)) {
       this.setState(
         context,
         this.STATES.COMPLETED
       );
+    } else {
+      this.setState(
+        context,
+        this.STATES.VERIFYING
+      );
     }
     return context;
   },
+  // ============================================
+  // PREPARE
+  // ============================================
   // --------------------------------------------
   // Prépare une exécution.
   // --------------------------------------------
@@ -535,12 +770,12 @@ const NexaAgent = {
     context.state = this.STATES.PLANNING;
     return context;
   },
+  // ============================================
+  // RUN
+  // ============================================
   // --------------------------------------------
   // Point d'entrée complet :
-  // prépare puis exécute le plan.
-  //
-  // Cette fonction sera utilisée par le Brain
-  // à l'étape suivante.
+  // Prepare → Execute → Verify → Finalize
   // --------------------------------------------
   async run(message, objective, plan) {
     const context = this.prepare(
@@ -548,10 +783,20 @@ const NexaAgent = {
       objective,
       plan
     );
-    if (context.state === this.STATES.FAILED) {
+    if (
+      context.state === this.STATES.FAILED
+    ) {
       return context;
     }
-    return await this.executePlan(context);
+    await this.executePlan(context);
+    if (
+      context.state === this.STATES.FAILED
+    ) {
+      return context;
+    }
+    return await this.verifyAndFinalize(
+      context
+    );
   },
   // --------------------------------------------
   // Retourne une copie du contexte.
@@ -568,5 +813,5 @@ const NexaAgent = {
 console.log(
   "NexaAgent v" +
     NexaAgent.version +
-    " chargé. Planner + Executor prêts."
+    " chargé. Planner + Executor + Verifier + Finalizer prêts."
 );
