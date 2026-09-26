@@ -1,13 +1,15 @@
 // ============================================
-// NEXA AGENT - version 0.6
+// NEXA AGENT - version 0.7
 // Planner + Executor + Verifier + Finalizer
 // + Comparison Engine
+// + Comparison Criteria
 //
 // Rôle actuel :
 // - créer un contexte d'exécution
 // - définir un objectif
 // - créer un plan
 // - détecter des localisations météo dynamiques
+// - détecter le critère de comparaison
 // - stocker un plan
 // - suivre les étapes
 // - exécuter les Tools
@@ -23,11 +25,13 @@
 // - conserve la liste dynamique des localisations météo
 // - conserve le passage correct des arguments météo
 // - conserve Planner + Executor + Verifier + Finalizer
-// - ajoute un moteur générique de comparaison
+// - conserve le moteur générique de comparaison
+// - ajoute la détection du critère demandé
+// - compare la bonne valeur selon le critère
 // ============================================
 
 const NexaAgent = {
-  version: "0.6",
+  version: "0.7",
 
   MAX_STEPS: 10,
 
@@ -210,6 +214,365 @@ const NexaAgent = {
       });
 
     return locations;
+  },
+
+  // ============================================
+  // COMPARISON CRITERIA
+  // ============================================
+
+  // --------------------------------------------
+  // Détecte le critère demandé par l'utilisateur.
+  //
+  // Exemples :
+  // "en fonction de la température"
+  // -> temperature
+  //
+  // "en fonction du vent"
+  // -> wind
+  //
+  // "en fonction du risque de pluie"
+  // -> rain
+  // --------------------------------------------
+  extractComparisonCriterion(text) {
+    const source = String(text || "").trim();
+
+    if (!source) {
+      return null;
+    }
+
+    const criteria = [
+      {
+        type: "temperature",
+        patterns: [
+          /\ben fonction de\s+(?:la\s+)?température\b/i,
+          /\bselon\s+(?:la\s+)?température\b/i,
+          /\bpar rapport à\s+(?:la\s+)?température\b/i,
+          /\bcompar(?:e|er|aison)\s+.*\btempérature\b/i,
+          /\btempérature\b/i
+        ]
+      },
+      {
+        type: "wind",
+        patterns: [
+          /\ben fonction du\s+vent\b/i,
+          /\ben fonction de\s+(?:la\s+)?vitesse du vent\b/i,
+          /\bselon\s+(?:le\s+)?vent\b/i,
+          /\bpar rapport au\s+vent\b/i,
+          /\bvent\b/i
+        ]
+      },
+      {
+        type: "rain",
+        patterns: [
+          /\ben fonction du\s+risque de pluie\b/i,
+          /\ben fonction du\s+risque de précipitations\b/i,
+          /\ben fonction de\s+(?:la\s+)?pluie\b/i,
+          /\ben fonction des\s+précipitations\b/i,
+          /\bselon\s+(?:le\s+)?risque de pluie\b/i,
+          /\bselon\s+(?:le\s+)?risque de précipitations\b/i,
+          /\bselon\s+(?:la\s+)?pluie\b/i,
+          /\bpar rapport au\s+risque de pluie\b/i,
+          /\brisque de pluie\b/i,
+          /\brisque de précipitations\b/i
+        ]
+      },
+      {
+        type: "humidity",
+        patterns: [
+          /\ben fonction de\s+(?:l')?humidité\b/i,
+          /\bselon\s+(?:l')?humidité\b/i,
+          /\bpar rapport à\s+(?:l')?humidité\b/i,
+          /\bhumidité\b/i
+        ]
+      }
+    ];
+
+    for (const criterion of criteria) {
+      for (const pattern of criterion.patterns) {
+        if (pattern.test(source)) {
+          return criterion.type;
+        }
+      }
+    }
+
+    return null;
+  },
+
+  // --------------------------------------------
+  // Retourne le nom lisible du critère.
+  // --------------------------------------------
+  getComparisonCriterionLabel(criterion) {
+    switch (criterion) {
+      case "temperature":
+        return "température";
+
+      case "wind":
+        return "vent";
+
+      case "rain":
+        return "risque de pluie";
+
+      case "humidity":
+        return "humidité";
+
+      default:
+        return null;
+    }
+  },
+
+  // --------------------------------------------
+  // Extrait une valeur correspondant au critère
+  // depuis un résultat météo.
+  //
+  // IMPORTANT :
+  // On ne prend plus systématiquement le premier
+  // nombre trouvé dans le texte.
+  // --------------------------------------------
+  extractCriterionValue(value, criterion) {
+    const text =
+      this.normalizeComparisonText(value);
+
+    if (!text || !criterion) {
+      return null;
+    }
+
+    let match = null;
+
+    if (criterion === "temperature") {
+      match = text.match(
+        /(?:météo|meteo).*?:\s*([-+]?\d+(?:[.,]\d+)?)\s*°\s*[CF]/i
+      );
+
+      if (!match) {
+        match = text.match(
+          /(?:température|temperature)\s*[:=]\s*([-+]?\d+(?:[.,]\d+)?)\s*°?\s*[CF]?/i
+        );
+      }
+
+      if (!match) {
+        match = text.match(
+          /([-+]?\d+(?:[.,]\d+)?)\s*°\s*[CF]/i
+        );
+      }
+    }
+
+    if (criterion === "wind") {
+      match = text.match(
+        /vent\s*:\s*([-+]?\d+(?:[.,]\d+)?)\s*km\/h/i
+      );
+
+      if (!match) {
+        match = text.match(
+          /vent(?:\s+à|\s*=)?\s*([-+]?\d+(?:[.,]\d+)?)\s*km\/h/i
+        );
+      }
+
+      if (!match) {
+        match = text.match(
+          /([-+]?\d+(?:[.,]\d+)?)\s*km\/h/i
+        );
+      }
+    }
+
+    if (criterion === "rain") {
+      match = text.match(
+        /(?:risque de pluie|risque de précipitations|pluie|précipitations)\s*[:=]\s*([-+]?\d+(?:[.,]\d+)?)\s*%/i
+      );
+
+      if (!match) {
+        const percentMatches =
+          text.match(
+            /[-+]?\d+(?:[.,]\d+)?\s*%/g
+          );
+
+        if (percentMatches && percentMatches.length > 0) {
+          const firstPercentage =
+            percentMatches[0].match(
+              /[-+]?\d+(?:[.,]\d+)?/
+            );
+
+          if (firstPercentage) {
+            return Number(
+              firstPercentage[0].replace(",", ".")
+            );
+          }
+        }
+      }
+    }
+
+    if (criterion === "humidity") {
+      match = text.match(
+        /(?:humidité|humidity)\s*[:=]\s*([-+]?\d+(?:[.,]\d+)?)\s*%/i
+      );
+
+      if (!match) {
+        match = text.match(
+          /([-+]?\d+(?:[.,]\d+)?)\s*%/i
+        );
+      }
+    }
+
+    if (!match || !match[1]) {
+      return null;
+    }
+
+    const numeric =
+      Number(
+        match[1].replace(",", ".")
+      );
+
+    return Number.isFinite(numeric)
+      ? numeric
+      : null;
+  },
+
+  // --------------------------------------------
+  // Définit l'unité associée au critère.
+  // --------------------------------------------
+  getComparisonCriterionUnit(criterion, value) {
+    switch (criterion) {
+      case "temperature":
+        return "°C";
+
+      case "wind":
+        return "km/h";
+
+      case "rain":
+      case "humidity":
+        return "%";
+
+      default:
+        return this.extractComparisonUnit(value);
+    }
+  },
+
+  // --------------------------------------------
+  // Définit le verbe de comparaison.
+  // --------------------------------------------
+  getComparisonRelation(difference, criterion) {
+    if (difference > 0) {
+      if (criterion === "rain") {
+        return "a un risque de pluie supérieur à";
+      }
+
+      if (criterion === "wind") {
+        return "a un vent supérieur à";
+      }
+
+      if (criterion === "humidity") {
+        return "a une humidité supérieure à";
+      }
+
+      return "est supérieur à";
+    }
+
+    if (difference < 0) {
+      if (criterion === "rain") {
+        return "a un risque de pluie inférieur à";
+      }
+
+      if (criterion === "wind") {
+        return "a un vent inférieur à";
+      }
+
+      if (criterion === "humidity") {
+        return "a une humidité inférieure à";
+      }
+
+      return "est inférieur à";
+    }
+
+    if (criterion === "rain") {
+      return "a le même risque de pluie que";
+    }
+
+    if (criterion === "wind") {
+      return "a le même vent que";
+    }
+
+    if (criterion === "humidity") {
+      return "a la même humidité que";
+    }
+
+    return "a la même valeur que";
+  },
+
+  // --------------------------------------------
+  // Définit le verbe pour une différence.
+  // --------------------------------------------
+  getComparisonDifferenceLabel(criterion) {
+    switch (criterion) {
+      case "temperature":
+        return "de";
+
+      case "wind":
+        return "de";
+
+      case "rain":
+        return "de";
+
+      case "humidity":
+        return "de";
+
+      default:
+        return "de";
+    }
+  },
+
+  // --------------------------------------------
+  // Définit le texte final d'une comparaison.
+  // --------------------------------------------
+  buildComparisonText(
+    firstLabel,
+    secondLabel,
+    difference,
+    absoluteDifference,
+    unit,
+    criterion
+  ) {
+    const criterionLabel =
+      this.getComparisonCriterionLabel(
+        criterion
+      );
+
+    let relation =
+      this.getComparisonRelation(
+        difference,
+        criterion
+      );
+
+    let comparisonText =
+      secondLabel +
+      " " +
+      relation +
+      " " +
+      firstLabel;
+
+    if (absoluteDifference > 0) {
+      const formattedDifference =
+        Number.isInteger(
+          absoluteDifference
+        )
+          ? String(absoluteDifference)
+          : absoluteDifference.toFixed(1);
+
+      comparisonText +=
+        " de " +
+        formattedDifference +
+        (unit ? " " + unit : "");
+    } else {
+      comparisonText += ".";
+    }
+
+    if (criterionLabel) {
+      comparisonText =
+        "Selon la " +
+        criterionLabel +
+        " : " +
+        comparisonText;
+    }
+
+    return comparisonText;
   },
 
   // --------------------------------------------
@@ -592,11 +955,8 @@ const NexaAgent = {
   // --------------------------------------------
   // Extrait les valeurs numériques d'un résultat.
   //
-  // Exemples :
-  // "22 °C"       -> 22
-  // "22°C"        -> 22
-  // "17 degrés"   -> 17
-  // { temperature: 22 } -> 22
+  // Utilisé comme mécanisme générique de secours
+  // lorsqu'aucun critère précis n'est demandé.
   // --------------------------------------------
   extractNumericValues(value) {
     const values = [];
@@ -745,25 +1105,82 @@ const NexaAgent = {
   // --------------------------------------------
   // Compare deux résultats numériques.
   // --------------------------------------------
-  compareNumericResults(first, second) {
-    const firstValues =
-      this.extractNumericValues(first.result);
+  compareNumericResults(first, second, criterion) {
+    let firstValue = null;
+    let secondValue = null;
+    let unit = null;
 
-    const secondValues =
-      this.extractNumericValues(second.result);
+    // ------------------------------------------
+    // Si un critère est demandé, on extrait
+    // spécifiquement la valeur correspondante.
+    // ------------------------------------------
+    if (criterion) {
+      firstValue =
+        this.extractCriterionValue(
+          first.result,
+          criterion
+        );
+
+      secondValue =
+        this.extractCriterionValue(
+          second.result,
+          criterion
+        );
+
+      unit =
+        this.getComparisonCriterionUnit(
+          criterion,
+          first.result
+        );
+    }
+
+    // ------------------------------------------
+    // Compatibilité avec le comportement
+    // précédent si aucun critère n'est précisé.
+    // ------------------------------------------
+    if (
+      firstValue === null ||
+      secondValue === null
+    ) {
+      if (!criterion) {
+        const firstValues =
+          this.extractNumericValues(
+            first.result
+          );
+
+        const secondValues =
+          this.extractNumericValues(
+            second.result
+          );
+
+        if (
+          firstValues.length > 0 &&
+          secondValues.length > 0
+        ) {
+          firstValue = firstValues[0];
+          secondValue = secondValues[0];
+
+          unit =
+            this.extractComparisonUnit(
+              first.result
+            ) ||
+            this.extractComparisonUnit(
+              second.result
+            );
+        }
+      }
+    }
 
     if (
-      firstValues.length === 0 ||
-      secondValues.length === 0
+      firstValue === null ||
+      secondValue === null
     ) {
       return {
         ok: false,
-        error: "Aucune valeur numérique comparable trouvée."
+        error:
+          "Les résultats ne contiennent pas de valeurs comparables pour le critère demandé."
       };
     }
-
-    const firstValue = firstValues[0];
-    const secondValue = secondValues[0];
 
     const difference =
       secondValue - firstValue;
@@ -781,53 +1198,34 @@ const NexaAgent = {
         second.result
       );
 
-    const unit =
-      this.extractComparisonUnit(
-        first.result
-      ) ||
-      this.extractComparisonUnit(
-        second.result
+    if (!unit) {
+      unit =
+        this.extractComparisonUnit(
+          first.result
+        ) ||
+        this.extractComparisonUnit(
+          second.result
+        );
+    }
+
+    const comparisonText =
+      this.buildComparisonText(
+        firstLabel,
+        secondLabel,
+        difference,
+        absoluteDifference,
+        unit,
+        criterion
       );
-
-    let relation;
-
-    if (difference > 0) {
-      relation =
-        secondLabel +
-        " est supérieur à " +
-        firstLabel;
-    } else if (difference < 0) {
-      relation =
-        secondLabel +
-        " est inférieur à " +
-        firstLabel;
-    } else {
-      relation =
-        firstLabel +
-        " et " +
-        secondLabel +
-        " ont la même valeur";
-    }
-
-    const formattedDifference =
-      Number.isInteger(absoluteDifference)
-        ? String(absoluteDifference)
-        : absoluteDifference.toFixed(1);
-
-    let comparisonText = relation;
-
-    if (absoluteDifference > 0) {
-      comparisonText +=
-        " de " +
-        formattedDifference +
-        (unit ? " " + unit : "");
-    } else {
-      comparisonText += ".";
-    }
 
     return {
       ok: true,
       type: "numeric",
+      criterion: criterion || null,
+      criterionLabel:
+        this.getComparisonCriterionLabel(
+          criterion
+        ),
       first: {
         stepId: first.stepId,
         label: firstLabel,
@@ -880,6 +1278,15 @@ const NexaAgent = {
       };
     }
 
+    // ------------------------------------------
+    // Détection du critère à partir de la
+    // demande originale de l'utilisateur.
+    // ------------------------------------------
+    const criterion =
+      this.extractComparisonCriterion(
+        context.input || context.objective
+      );
+
     const comparisons = [];
 
     for (
@@ -896,7 +1303,8 @@ const NexaAgent = {
       const comparison =
         this.compareNumericResults(
           first,
-          second
+          second,
+          criterion
         );
 
       if (comparison.ok) {
@@ -905,10 +1313,19 @@ const NexaAgent = {
     }
 
     if (comparisons.length === 0) {
+      const criterionLabel =
+        this.getComparisonCriterionLabel(
+          criterion
+        );
+
       return {
         ok: false,
         error:
-          "Les résultats disponibles ne contiennent pas de valeurs numériques comparables."
+          criterionLabel
+            ? "Les résultats disponibles ne contiennent pas de valeurs numériques comparables pour le critère : " +
+              criterionLabel +
+              "."
+            : "Les résultats disponibles ne contiennent pas de valeurs numériques comparables."
       };
     }
 
@@ -920,6 +1337,11 @@ const NexaAgent = {
     return {
       ok: true,
       type: "comparison",
+      criterion: criterion,
+      criterionLabel:
+        this.getComparisonCriterionLabel(
+          criterion
+        ),
       comparisons: comparisons,
       text: texts.join("\n")
     };
@@ -1577,5 +1999,5 @@ const NexaAgent = {
 console.log(
   "NexaAgent v" +
     NexaAgent.version +
-    " chargé. Planner + Executor + Verifier + Finalizer + Comparison Engine prêts."
+    " chargé. Planner + Executor + Verifier + Finalizer + Comparison Engine + Comparison Criteria prêts."
 );
