@@ -660,6 +660,12 @@ const NexaAgent = {
 
   // --------------------------------------------
   // Cherche une unité commune.
+  //
+  // IMPORTANT :
+  // L'unité doit être située directement après
+  // une valeur numérique afin d'éviter qu'une
+  // lettre comme "m" dans "Météo" soit détectée
+  // comme l'unité "mètre".
   // --------------------------------------------
   extractComparisonUnit(value) {
     const text =
@@ -670,14 +676,14 @@ const NexaAgent = {
     }
 
     const unitMatch = text.match(
-      /(?:°\s*[CF]|%|km\/h|km|m|kg|g|€|\$|£|h|min|s|degr(?:é|e)s?)/i
+      /[-+]?\d+(?:[.,]\d+)?\s*(°\s*[CF]|%|km\/h|km|kg|g|€|\$|£|h|min|s|m|degr(?:é|e)s?)/i
     );
 
     if (!unitMatch) {
       return null;
     }
 
-    return unitMatch[0];
+    return unitMatch[1].replace(/\s+/g, " ").trim();
   },
 
   // --------------------------------------------
