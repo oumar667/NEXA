@@ -1,10 +1,10 @@
 // ============================================
-// NEXA TOOLS - version 1.4
+// NEXA TOOLS - version 1.5
 // Registre et exécution des outils de NEXA
 // ============================================
 
 const NexaTools = {
-  version: "1.4",
+  version: "1.5",
 
   // --------------------------------------------
   // REGISTRE
@@ -198,7 +198,6 @@ const NexaTools = {
         })
         .filter(Boolean);
 
-    // Recherche d'abord dans les parties
     for (
       let i = parts.length - 1;
       i >= 0;
@@ -214,7 +213,6 @@ const NexaTools = {
       }
     }
 
-    // Puis recherche du pays à la fin
     const normalized =
       this.normalizePlaceName(
         raw
@@ -1052,7 +1050,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // RESOLUTION
+  // RESOLUTION CLASSIQUE
   // --------------------------------------------
   resolvePlace(
     results,
@@ -1282,6 +1280,396 @@ const NexaTools = {
   },
 
   // --------------------------------------------
+  // IDENTIFIANTS ADMINISTRATIFS
+  // --------------------------------------------
+  placeMatchesAdministrativeId(
+    place,
+    administrativeIds
+  ) {
+    if (
+      !place ||
+      !Array.isArray(
+        administrativeIds
+      ) ||
+      administrativeIds.length === 0
+    ) {
+      return false;
+    }
+
+    const ids = [
+      place.admin1_id,
+      place.admin2_id,
+      place.admin3_id,
+      place.admin4_id
+    ]
+      .filter(function (value) {
+        return (
+          value !== undefined &&
+          value !== null &&
+          String(value).trim() !== ""
+        );
+      })
+      .map(function (value) {
+        return String(value);
+      });
+
+    return administrativeIds.some(
+      function (id) {
+        return ids.includes(
+          String(id)
+        );
+      }
+    );
+  },
+
+  // --------------------------------------------
+  // RECHERCHE DES IDENTIFIANTS ADMINISTRATIFS
+  // --------------------------------------------
+  async getAdministrativeIds(
+    component,
+    countryCode
+  ) {
+    const value =
+      String(component || "").trim();
+
+    if (!value) {
+      return [];
+    }
+
+    const search =
+      await this.findPlacesSafe(
+        value,
+        100,
+        countryCode || ""
+      );
+
+    if (
+      !search.ok ||
+      !Array.isArray(
+        search.results
+      )
+    ) {
+      return [];
+    }
+
+    const normalizedComponent =
+      this.normalizePlaceName(
+        value
+      );
+
+    const ids = [];
+
+    search.results.forEach(
+      function (place) {
+        const featureCode =
+          String(
+            place.feature_code || ""
+          ).toUpperCase();
+
+        const isAdministrative =
+          featureCode.startsWith("A.");
+
+        const names = [
+          place.name,
+          place.admin1,
+          place.admin2,
+          place.admin3,
+          place.admin4,
+          place.feature_name
+        ]
+          .filter(Boolean)
+          .map(
+            this.normalizePlaceName.bind(this)
+          );
+
+        const nameMatches =
+          names.some(
+            function (name) {
+              return (
+                name ===
+                  normalizedComponent ||
+                name.includes(
+                  normalizedComponent
+                ) ||
+                normalizedComponent.includes(
+                  name
+                )
+              );
+            }
+          );
+
+        if (
+          isAdministrative &&
+          nameMatches
+        ) {
+          [
+            place.id,
+            place.admin1_id,
+            place.admin2_id,
+            place.admin3_id,
+            place.admin4_id
+          ]
+            .filter(function (id) {
+              return (
+                id !== undefined &&
+                id !== null &&
+                String(id).trim() !== ""
+              );
+            })
+            .forEach(
+              function (id) {
+                const normalizedId =
+                  String(id);
+
+                if (
+                  !ids.includes(
+                    normalizedId
+                  )
+                ) {
+                  ids.push(
+                    normalizedId
+                  );
+                }
+              }
+            );
+        }
+      }.bind(this)
+    );
+
+    return ids;
+  },
+
+  // --------------------------------------------
+  // RESOLUTION AVEC IDENTIFIANTS ADMINISTRATIFS
+  // --------------------------------------------
+  async resolvePlaceWithAdministrativeIds(
+    results,
+    parts
+  ) {
+    const basicResolution =
+      this.resolvePlace(
+        results,
+        parts
+      );
+
+    if (
+      basicResolution.type !==
+        "not_found" ||
+      !parts ||
+      !parts.hint
+    ) {
+      return basicResolution;
+    }
+
+    const hintParts =
+      this.getHintParts(
+        parts.hint
+      );
+
+    if (
+      !hintParts.length
+    ) {
+      return basicResolution;
+    }
+
+    const countryCode =
+      this.getCountryCodeFromHint(
+        parts.hint
+      );
+
+    let candidates =
+      results.filter(
+        function (place) {
+          return (
+            this.normalizePlaceName(
+              place.name
+            ) ===
+            this.normalizePlaceName(
+              parts.city
+            ) &&
+            (
+              !countryCode ||
+              this.normalize(
+                place.country_code || ""
+              ) ===
+              countryCode.toLowerCase()
+            )
+          );
+        }.bind(this)
+      );
+
+    if (
+      candidates.length === 0
+    ) {
+      candidates =
+        results.filter(
+          function (place) {
+            return (
+              this.normalizePlaceName(
+                place.name
+              ) ===
+              this.normalizePlaceName(
+                parts.city
+              )
+            );
+          }.bind(this)
+        );
+    }
+
+    if (
+      candidates.length === 0
+    ) {
+      return basicResolution;
+    }
+
+    // ------------------------------------------
+    // Chaque précision administrative est
+    // recherchée individuellement.
+    //
+    // Exemple :
+    // "Haut-Rhin France"
+    //
+    // Haut-Rhin -> identifiant administratif
+    // France    -> filtre pays
+    // ------------------------------------------
+    let administrativeCandidates =
+      candidates.slice();
+
+    for (
+      let i = 0;
+      i < hintParts.length;
+      i++
+    ) {
+      const component =
+        hintParts[i];
+
+      if (!component) {
+        continue;
+      }
+
+      const componentCountryCode =
+        this.getCountryCode(
+          component
+        );
+
+      if (
+        componentCountryCode
+      ) {
+        administrativeCandidates =
+          administrativeCandidates.filter(
+            function (place) {
+              return (
+                this.normalize(
+                  place.country_code || ""
+                ) ===
+                componentCountryCode.toLowerCase()
+              );
+            }.bind(this)
+          );
+
+        continue;
+      }
+
+      if (
+        this.placeMatchesPostalCode(
+          candidates[0],
+          component
+        )
+      ) {
+        administrativeCandidates =
+          administrativeCandidates.filter(
+            function (place) {
+              return this.placeMatchesPostalCode(
+                place,
+                component
+              );
+            }.bind(this)
+          );
+
+        continue;
+      }
+
+      const directAdministrativeMatches =
+        administrativeCandidates.filter(
+          function (place) {
+            return this.placeMatchesAdministrativeComponent(
+              place,
+              component
+            );
+          }.bind(this)
+        );
+
+      if (
+        directAdministrativeMatches.length > 0
+      ) {
+        administrativeCandidates =
+          directAdministrativeMatches;
+
+        continue;
+      }
+
+      const administrativeIds =
+        await this.getAdministrativeIds(
+          component,
+          countryCode
+        );
+
+      if (
+        administrativeIds.length > 0
+      ) {
+        const idMatches =
+          administrativeCandidates.filter(
+            function (place) {
+              return this.placeMatchesAdministrativeId(
+                place,
+                administrativeIds
+              );
+            }.bind(this)
+          );
+
+        if (
+          idMatches.length > 0
+        ) {
+          administrativeCandidates =
+            idMatches;
+        } else {
+          return {
+            type: "not_found"
+          };
+        }
+      } else {
+        return {
+          type: "not_found"
+        };
+      }
+    }
+
+    if (
+      administrativeCandidates.length === 1
+    ) {
+      return {
+        type: "resolved",
+        place:
+          administrativeCandidates[0]
+      };
+    }
+
+    if (
+      administrativeCandidates.length > 1
+    ) {
+      return {
+        type: "ambiguous",
+        candidates:
+          administrativeCandidates
+      };
+    }
+
+    return {
+      type: "not_found"
+    };
+  },
+
+  // --------------------------------------------
   // RESOLUTION SANS VIRGULES
   // --------------------------------------------
   async resolveUnseparatedPlace(
@@ -1340,14 +1728,6 @@ const NexaTools = {
         continue;
       }
 
-      // ----------------------------------------
-      // On détecte le pays dans le suffixe.
-      // Exemple :
-      // Saint-Louis Haut-Rhin France
-      // → city = Saint-Louis
-      // → hint = Haut-Rhin France
-      // → countryCode = FR
-      // ----------------------------------------
       const countryCode =
         this.getCountryCodeFromHint(
           hint
@@ -1374,7 +1754,7 @@ const NexaTools = {
       };
 
       const resolution =
-        this.resolvePlace(
+        await this.resolvePlaceWithAdministrativeIds(
           citySearch.results,
           parts
         );
@@ -1617,7 +1997,7 @@ const NexaTools = {
           qualifiedSearch.results;
 
         resolution =
-          this.resolvePlace(
+          await this.resolvePlaceWithAdministrativeIds(
             results,
             parts
           );
@@ -1633,16 +2013,16 @@ const NexaTools = {
       // Exemple :
       // Saint-Louis, Haut-Rhin, France
       //
-      // On recherche Saint-Louis avec le code
-      // pays FR puis on vérifie localement :
-      // admin2 = Haut-Rhin
-      // country = France
+      // On recherche Saint-Louis avec FR puis
+      // on vérifie :
+      //
+      // 1. pays
+      // 2. admin1/admin2/admin3/admin4
+      // 3. identifiants administratifs
       // ----------------------------------------
       if (
-        (
-          resolution.type ===
-          "not_found"
-        ) &&
+        resolution.type ===
+          "not_found" &&
         (
           parts.hint ||
           parts.postalCode
@@ -1661,11 +2041,21 @@ const NexaTools = {
           results =
             citySearch.results;
 
-          resolution =
-            this.resolvePlace(
-              results,
-              parts
-            );
+          if (
+            parts.hint
+          ) {
+            resolution =
+              await this.resolvePlaceWithAdministrativeIds(
+                results,
+                parts
+              );
+          } else {
+            resolution =
+              this.resolvePlace(
+                results,
+                parts
+              );
+          }
         }
       }
 
