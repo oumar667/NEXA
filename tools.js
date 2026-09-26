@@ -1,10 +1,10 @@
 // ============================================
-// NEXA TOOLS - version 1.3
+// NEXA TOOLS - version 1.4
 // Registre et exécution des outils de NEXA
 // ============================================
 
 const NexaTools = {
-  version: "1.3",
+  version: "1.4",
 
   // --------------------------------------------
   // REGISTRE
@@ -139,6 +139,115 @@ const NexaTools = {
     de: "allemagne",
     ch: "suisse",
     be: "belgique"
+  },
+
+  countryCodes: {
+    france: "FR",
+    "etats unis": "US",
+    "royaume uni": "GB",
+    japon: "JP",
+    senegal: "SN",
+    allemagne: "DE",
+    suisse: "CH",
+    belgique: "BE"
+  },
+
+  // --------------------------------------------
+  // DETECTION DU CODE PAYS
+  // --------------------------------------------
+  getCountryCode(country) {
+    const normalized =
+      this.normalizeCountryName(
+        country
+      );
+
+    if (!normalized) {
+      return "";
+    }
+
+    if (
+      normalized.length === 2 &&
+      /^[a-z]{2}$/i.test(normalized)
+    ) {
+      return normalized.toUpperCase();
+    }
+
+    return (
+      this.countryCodes[
+        normalized
+      ] || ""
+    );
+  },
+
+  // --------------------------------------------
+  // DETECTION DU PAYS DANS UNE PRECISION
+  // --------------------------------------------
+  getCountryCodeFromHint(hint) {
+    const raw =
+      String(hint || "").trim();
+
+    if (!raw) {
+      return "";
+    }
+
+    const parts =
+      raw
+        .split(",")
+        .map(function (part) {
+          return part.trim();
+        })
+        .filter(Boolean);
+
+    // Recherche d'abord dans les parties
+    for (
+      let i = parts.length - 1;
+      i >= 0;
+      i--
+    ) {
+      const code =
+        this.getCountryCode(
+          parts[i]
+        );
+
+      if (code) {
+        return code;
+      }
+    }
+
+    // Puis recherche du pays à la fin
+    const normalized =
+      this.normalizePlaceName(
+        raw
+      );
+
+    const countryNames =
+      Object.keys(
+        this.countryCodes
+      ).sort(function (a, b) {
+        return b.length - a.length;
+      });
+
+    for (
+      let i = 0;
+      i < countryNames.length;
+      i++
+    ) {
+      const country =
+        countryNames[i];
+
+      if (
+        normalized === country ||
+        normalized.endsWith(
+          " " + country
+        )
+      ) {
+        return this.countryCodes[
+          country
+        ];
+      }
+    }
+
+    return "";
   },
 
   // --------------------------------------------
@@ -328,12 +437,80 @@ const NexaTools = {
   // COMPOSANTS DE PRECISION
   // --------------------------------------------
   getHintParts(hint) {
-    return String(hint || "")
-      .split(",")
-      .map(function (part) {
-        return part.trim();
-      })
-      .filter(Boolean);
+    const raw =
+      String(hint || "").trim();
+
+    if (!raw) {
+      return [];
+    }
+
+    const commaParts =
+      raw
+        .split(",")
+        .map(function (part) {
+          return part.trim();
+        })
+        .filter(Boolean);
+
+    if (
+      commaParts.length > 1
+    ) {
+      return commaParts;
+    }
+
+    const normalized =
+      this.normalizePlaceName(
+        raw
+      );
+
+    const countryNames =
+      Object.keys(
+        this.countryCodes
+      ).sort(function (a, b) {
+        return b.length - a.length;
+      });
+
+    for (
+      let i = 0;
+      i < countryNames.length;
+      i++
+    ) {
+      const country =
+        countryNames[i];
+
+      if (
+        normalized === country
+      ) {
+        return [raw];
+      }
+
+      if (
+        normalized.endsWith(
+          " " + country
+        )
+      ) {
+        const prefix =
+          normalized
+            .slice(
+              0,
+              -(
+                country.length + 1
+              )
+            )
+            .trim();
+
+        if (prefix) {
+          return [
+            prefix,
+            country
+          ];
+        }
+
+        return [country];
+      }
+    }
+
+    return [raw];
   },
 
   getHintComponentSets(hint) {
@@ -429,7 +606,6 @@ const NexaTools = {
           this.normalizePlaceName.bind(this)
         );
 
-    // Correspondance exacte
     if (
       fields.includes(
         normalizedComponent
@@ -438,7 +614,6 @@ const NexaTools = {
       return true;
     }
 
-    // Correspondance contenant
     return fields.some(
       function (field) {
         return (
@@ -548,9 +723,6 @@ const NexaTools = {
     const explicitParts =
       this.getHintParts(rawHint);
 
-    // ------------------------------------------
-    // Traitement intelligent des parties
-    // ------------------------------------------
     for (
       let i = 0;
       i < explicitParts.length;
@@ -669,7 +841,8 @@ const NexaTools = {
   // --------------------------------------------
   async findPlaces(
     name,
-    count
+    count,
+    countryCode
   ) {
     const safeCount =
       Math.min(
@@ -680,13 +853,21 @@ const NexaTools = {
         100
       );
 
-    const url =
+    let url =
       "https://geocoding-api.open-meteo.com/v1/search" +
       "?name=" +
       encodeURIComponent(name) +
       "&count=" +
       safeCount +
       "&language=fr&format=json";
+
+    if (countryCode) {
+      url +=
+        "&countryCode=" +
+        encodeURIComponent(
+          countryCode
+        );
+    }
 
     const response =
       await fetch(url);
@@ -731,7 +912,8 @@ const NexaTools = {
   // --------------------------------------------
   async findPlacesSafe(
     name,
-    count
+    count,
+    countryCode
   ) {
     try {
       return {
@@ -739,7 +921,8 @@ const NexaTools = {
         results:
           await this.findPlaces(
             name,
-            count
+            count,
+            countryCode
           )
       };
     } catch (error) {
@@ -1157,10 +1340,24 @@ const NexaTools = {
         continue;
       }
 
+      // ----------------------------------------
+      // On détecte le pays dans le suffixe.
+      // Exemple :
+      // Saint-Louis Haut-Rhin France
+      // → city = Saint-Louis
+      // → hint = Haut-Rhin France
+      // → countryCode = FR
+      // ----------------------------------------
+      const countryCode =
+        this.getCountryCodeFromHint(
+          hint
+        );
+
       const citySearch =
         await this.findPlacesSafe(
           city,
-          100
+          100,
+          countryCode
         );
 
       if (
@@ -1384,6 +1581,14 @@ const NexaTools = {
       let resolution = null;
 
       // ----------------------------------------
+      // CODE PAYS CONNU
+      // ----------------------------------------
+      const requestedCountryCode =
+        this.getCountryCodeFromHint(
+          parts.hint
+        );
+
+      // ----------------------------------------
       // RECHERCHE DIRECTE
       // ----------------------------------------
       let searchName =
@@ -1401,7 +1606,8 @@ const NexaTools = {
       const qualifiedSearch =
         await this.findPlacesSafe(
           searchName,
-          100
+          100,
+          requestedCountryCode
         );
 
       if (
@@ -1424,15 +1630,11 @@ const NexaTools = {
       // ----------------------------------------
       // RECHERCHE DE LA VILLE SEULE
       //
-      // IMPORTANT :
-      // Pour :
+      // Exemple :
       // Saint-Louis, Haut-Rhin, France
       //
-      // Open-Meteo ne permet pas de demander
-      // directement admin2 dans le qualificatif.
-      //
-      // On recherche donc Saint-Louis seul,
-      // puis on vérifie localement :
+      // On recherche Saint-Louis avec le code
+      // pays FR puis on vérifie localement :
       // admin2 = Haut-Rhin
       // country = France
       // ----------------------------------------
@@ -1449,7 +1651,8 @@ const NexaTools = {
         const citySearch =
           await this.findPlacesSafe(
             parts.city,
-            100
+            100,
+            requestedCountryCode
           );
 
         if (
