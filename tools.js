@@ -1,10 +1,10 @@
 // ============================================
-// NEXA TOOLS - version 1.2
+// NEXA TOOLS - version 1.3
 // Registre et exécution des outils de NEXA
 // ============================================
 
 const NexaTools = {
-  version: "1.2",
+  version: "1.3",
 
   // --------------------------------------------
   // REGISTRE
@@ -83,6 +83,62 @@ const NexaTools = {
       .replace(/\bste(?=\s)/g, "sainte")
       .replace(/\s+/g, " ")
       .trim();
+  },
+
+  // --------------------------------------------
+  // NORMALISATION DES PAYS
+  // --------------------------------------------
+  normalizeCountryName(str) {
+    const value =
+      this.normalizePlaceName(str);
+
+    const aliases = {
+      "france": "france",
+      "fr": "france",
+      "republique francaise": "france",
+
+      "etats unis": "etats unis",
+      "etats unis d amerique": "etats unis",
+      "usa": "etats unis",
+      "us": "etats unis",
+      "united states": "etats unis",
+
+      "royaume uni": "royaume uni",
+      "uk": "royaume uni",
+      "united kingdom": "royaume uni",
+
+      "japon": "japon",
+      "japan": "japon",
+
+      "senegal": "senegal",
+
+      "allemagne": "allemagne",
+      "germany": "allemagne",
+
+      "suisse": "suisse",
+      "switzerland": "suisse",
+
+      "belgique": "belgique",
+      "belgium": "belgique"
+    };
+
+    return aliases[value] || value;
+  },
+
+  // --------------------------------------------
+  // CODES PAYS
+  // --------------------------------------------
+  countryAliases: {
+    fr: "france",
+    us: "etats unis",
+    usa: "etats unis",
+    gb: "royaume uni",
+    uk: "royaume uni",
+    jp: "japon",
+    sn: "senegal",
+    de: "allemagne",
+    ch: "suisse",
+    be: "belgique"
   },
 
   // --------------------------------------------
@@ -321,8 +377,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // TOUTES LES INFORMATIONS GEOGRAPHIQUES
-  // D'UN RESULTAT
+  // INFORMATIONS GEOGRAPHIQUES
   // --------------------------------------------
   getPlaceFields(place) {
     if (!place) {
@@ -355,14 +410,14 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // TEST D'UNE COMPOSANTE
+  // COMPARAISON GENERIQUE
   // --------------------------------------------
   placeFieldMatchesComponent(
     place,
     component
   ) {
     const normalizedComponent =
-      this.normalize(component);
+      this.normalizePlaceName(component);
 
     if (!normalizedComponent) {
       return true;
@@ -371,7 +426,7 @@ const NexaTools = {
     const fields =
       this.getPlaceFields(place)
         .map(
-          this.normalize.bind(this)
+          this.normalizePlaceName.bind(this)
         );
 
     // Correspondance exacte
@@ -399,11 +454,88 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // TEST D'UNE PRECISION GEOGRAPHIQUE
-  //
-  // Important :
-  // chaque composante doit être retrouvée
-  // quelque part dans les informations du lieu.
+  // COMPARAISON D'UN PAYS
+  // --------------------------------------------
+  placeMatchesCountry(
+    place,
+    country
+  ) {
+    if (!country) {
+      return true;
+    }
+
+    const wanted =
+      this.normalizeCountryName(
+        country
+      );
+
+    const placeCountry =
+      this.normalizeCountryName(
+        place.country || ""
+      );
+
+    const countryCode =
+      this.normalize(
+        place.country_code || ""
+      );
+
+    if (
+      wanted === placeCountry
+    ) {
+      return true;
+    }
+
+    if (
+      this.countryAliases[
+        countryCode
+      ] === wanted
+    ) {
+      return true;
+    }
+
+    return false;
+  },
+
+  // --------------------------------------------
+  // COMPARAISON ADMINISTRATIVE
+  // --------------------------------------------
+  placeMatchesAdministrativeComponent(
+    place,
+    component
+  ) {
+    const wanted =
+      this.normalizePlaceName(
+        component
+      );
+
+    if (!wanted) {
+      return true;
+    }
+
+    const administrativeFields = [
+      place.admin1,
+      place.admin2,
+      place.admin3,
+      place.admin4
+    ]
+      .filter(Boolean)
+      .map(
+        this.normalizePlaceName.bind(this)
+      );
+
+    return administrativeFields.some(
+      function (field) {
+        return (
+          field === wanted ||
+          field.includes(wanted) ||
+          wanted.includes(field)
+        );
+      }
+    );
+  },
+
+  // --------------------------------------------
+  // PRECISION GEOGRAPHIQUE
   // --------------------------------------------
   placeMatchesHint(place, hint) {
     const rawHint =
@@ -413,88 +545,92 @@ const NexaTools = {
       return true;
     }
 
-    // ------------------------------------------
-    // Première méthode :
-    // parties explicites séparées par virgules
-    // ------------------------------------------
     const explicitParts =
       this.getHintParts(rawHint);
 
-    if (
-      explicitParts.length > 1
+    // ------------------------------------------
+    // Traitement intelligent des parties
+    // ------------------------------------------
+    for (
+      let i = 0;
+      i < explicitParts.length;
+      i++
     ) {
-      return explicitParts.every(
-        function (part) {
-          return this.placeFieldMatchesComponent(
-            place,
+      const part =
+        explicitParts[i];
+
+      if (!part) {
+        continue;
+      }
+
+      // Pays
+      if (
+        this.placeMatchesCountry(
+          place,
+          part
+        )
+      ) {
+        const normalizedPart =
+          this.normalizeCountryName(
             part
           );
-        },
-        this
-      );
-    }
 
-    // ------------------------------------------
-    // Deuxième méthode :
-    // texte sans virgules
-    // ------------------------------------------
-    const normalizedHint =
-      this.normalize(rawHint);
-
-    const hintWords =
-      normalizedHint.split(" ");
-
-    // Chaque mot important doit pouvoir être
-    // retrouvé dans les données géographiques.
-    const allFields =
-      this.getPlaceFields(place)
-        .map(
-          this.normalize.bind(this)
-        );
-
-    const combinedFields =
-      allFields.join(" ");
-
-    const allWordsMatch =
-      hintWords.every(
-        function (word) {
-          if (!word) {
-            return true;
-          }
-
-          return combinedFields.includes(
-            word
+        const normalizedPlaceCountry =
+          this.normalizeCountryName(
+            place.country || ""
           );
-        }
-      );
 
-    if (allWordsMatch) {
-      return true;
+        if (
+          normalizedPart ===
+          normalizedPlaceCountry
+        ) {
+          continue;
+        }
+
+        if (
+          this.countryAliases[
+            this.normalize(part)
+          ] ===
+          normalizedPlaceCountry
+        ) {
+          continue;
+        }
+      }
+
+      // Région / département / zone administrative
+      if (
+        this.placeMatchesAdministrativeComponent(
+          place,
+          part
+        )
+      ) {
+        continue;
+      }
+
+      // Code postal
+      if (
+        this.placeMatchesPostalCode(
+          place,
+          part
+        )
+      ) {
+        continue;
+      }
+
+      // Autre champ géographique
+      if (
+        this.placeFieldMatchesComponent(
+          place,
+          part
+        )
+      ) {
+        continue;
+      }
+
+      return false;
     }
 
-    // ------------------------------------------
-    // Troisième méthode :
-    // regroupements possibles
-    // ------------------------------------------
-    const componentSets =
-      this.getHintComponentSets(
-        rawHint
-      );
-
-    return componentSets.some(
-      function (components) {
-        return components.every(
-          function (component) {
-            return this.placeFieldMatchesComponent(
-              place,
-              component
-            );
-          },
-          this
-        );
-      },
-      this
-    );
+    return true;
   },
 
   // --------------------------------------------
@@ -535,12 +671,21 @@ const NexaTools = {
     name,
     count
   ) {
+    const safeCount =
+      Math.min(
+        Math.max(
+          Number(count) || 50,
+          1
+        ),
+        100
+      );
+
     const url =
       "https://geocoding-api.open-meteo.com/v1/search" +
       "?name=" +
       encodeURIComponent(name) +
       "&count=" +
-      count +
+      safeCount +
       "&language=fr&format=json";
 
     const response =
@@ -983,9 +1128,6 @@ const NexaTools = {
     const ambiguousCandidates =
       [];
 
-    // ------------------------------------------
-    // Toutes les coupures possibles
-    // ------------------------------------------
     for (
       let cityWordCount = 1;
       cityWordCount < words.length;
@@ -1018,7 +1160,7 @@ const NexaTools = {
       const citySearch =
         await this.findPlacesSafe(
           city,
-          50
+          100
         );
 
       if (
@@ -1065,18 +1207,12 @@ const NexaTools = {
       }
     }
 
-    // ------------------------------------------
-    // Une seule interprétation
-    // ------------------------------------------
     if (
       resolvedCandidates.length === 1
     ) {
       return resolvedCandidates[0];
     }
 
-    // ------------------------------------------
-    // Plusieurs interprétations mais même lieu
-    // ------------------------------------------
     if (
       resolvedCandidates.length > 1
     ) {
@@ -1135,9 +1271,6 @@ const NexaTools = {
       };
     }
 
-    // ------------------------------------------
-    // Ambiguïté détectée
-    // ------------------------------------------
     if (
       ambiguousCandidates.length > 0
     ) {
@@ -1251,7 +1384,7 @@ const NexaTools = {
       let resolution = null;
 
       // ----------------------------------------
-      // RECHERCHE COMPLETE
+      // RECHERCHE DIRECTE
       // ----------------------------------------
       let searchName =
         parts.city;
@@ -1268,7 +1401,7 @@ const NexaTools = {
       const qualifiedSearch =
         await this.findPlacesSafe(
           searchName,
-          50
+          100
         );
 
       if (
@@ -1289,13 +1422,19 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // FALLBACK IMPORTANT :
-      // rechercher uniquement la ville.
+      // RECHERCHE DE LA VILLE SEULE
       //
-      // Cela permet notamment :
+      // IMPORTANT :
+      // Pour :
       // Saint-Louis, Haut-Rhin, France
-      // -> recherche Saint-Louis
-      // -> filtrage Haut-Rhin + France
+      //
+      // Open-Meteo ne permet pas de demander
+      // directement admin2 dans le qualificatif.
+      //
+      // On recherche donc Saint-Louis seul,
+      // puis on vérifie localement :
+      // admin2 = Haut-Rhin
+      // country = France
       // ----------------------------------------
       if (
         (
@@ -1310,7 +1449,7 @@ const NexaTools = {
         const citySearch =
           await this.findPlacesSafe(
             parts.city,
-            50
+            100
           );
 
         if (
