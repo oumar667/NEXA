@@ -1,10 +1,10 @@
 // ============================================
-// NEXA TOOLS - version 1.5
+// NEXA TOOLS - version 1.4
 // Registre et exécution des outils de NEXA
 // ============================================
 
 const NexaTools = {
-  version: "1.5",
+  version: "1.4",
 
   // --------------------------------------------
   // REGISTRE
@@ -67,7 +67,7 @@ const NexaTools = {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[-'']/g, " ")
+      .replace(/[-'’]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   },
@@ -1556,17 +1556,6 @@ const NexaTools = {
 
   // --------------------------------------------
   // METEO
-  // ============================================
-  // CORRECTION v1.5 :
-  // Problème : quand hint est présent,
-  // on cherchait "City, hint" à Open-Meteo
-  // ce qui ne fonctionne pas.
-  //
-  // Solution : chercher TOUJOURS juste la
-  // ville avec le code pays détecté. Laisser
-  // resolvePlace() filtrer les résultats
-  // localement via placeMatchesHint().
-  // ============================================
   // --------------------------------------------
   async getWeather(city) {
     const name =
@@ -1602,12 +1591,21 @@ const NexaTools = {
       // ----------------------------------------
       // RECHERCHE DIRECTE
       // ----------------------------------------
-      // CORRECTION v1.5 : ne chercher QUE
-      // la ville, pas la ville + hint
-      // ----------------------------------------
+      let searchName =
+        parts.city;
+
+      if (
+        parts.hint
+      ) {
+        searchName =
+          parts.city +
+          ", " +
+          parts.hint;
+      }
+
       const qualifiedSearch =
         await this.findPlacesSafe(
-          parts.city,
+          searchName,
           100,
           requestedCountryCode
         );
@@ -1627,6 +1625,48 @@ const NexaTools = {
         resolution = {
           type: "not_found"
         };
+      }
+
+      // ----------------------------------------
+      // RECHERCHE DE LA VILLE SEULE
+      //
+      // Exemple :
+      // Saint-Louis, Haut-Rhin, France
+      //
+      // On recherche Saint-Louis avec le code
+      // pays FR puis on vérifie localement :
+      // admin2 = Haut-Rhin
+      // country = France
+      // ----------------------------------------
+      if (
+        (
+          resolution.type ===
+          "not_found"
+        ) &&
+        (
+          parts.hint ||
+          parts.postalCode
+        )
+      ) {
+        const citySearch =
+          await this.findPlacesSafe(
+            parts.city,
+            100,
+            requestedCountryCode
+          );
+
+        if (
+          citySearch.ok
+        ) {
+          results =
+            citySearch.results;
+
+          resolution =
+            this.resolvePlace(
+              results,
+              parts
+            );
+        }
       }
 
       // ----------------------------------------
