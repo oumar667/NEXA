@@ -1,15 +1,13 @@
 // ============================================
-// NEXA TOOLS - version 1.1
-// Les capacités de NEXA.
-// Registre d'outils : heure, date, calcul,
-// météo, Wikipédia, tâches, chronomètre,
-// lecture de fichiers joints.
+// NEXA TOOLS - version 1.2
+// Registre et exécution des outils de NEXA
 // ============================================
+
 const NexaTools = {
-  version: "1.1",
+  version: "1.2",
 
   // --------------------------------------------
-  // LE REGISTRE : la liste des outils disponibles
+  // REGISTRE
   // --------------------------------------------
   registry: {},
 
@@ -38,8 +36,8 @@ const NexaTools = {
         ok: true,
         result: result
       };
-    } catch (e) {
-      console.error("NexaTools error:", e);
+    } catch (error) {
+      console.error("NexaTools error:", error);
 
       return {
         ok: false,
@@ -49,10 +47,10 @@ const NexaTools = {
   },
 
   describe() {
-    return Object.values(this.registry).map(function (t) {
+    return Object.values(this.registry).map(function (tool) {
       return {
-        name: t.name,
-        description: t.description
+        name: tool.name,
+        description: tool.description
       };
     });
   },
@@ -61,8 +59,11 @@ const NexaTools = {
     return Object.keys(this.registry);
   },
 
+  // --------------------------------------------
+  // NORMALISATION GENERALE
+  // --------------------------------------------
   normalize(str) {
-    return (str || "")
+    return String(str || "")
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -72,10 +73,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Normalisation spécifique aux noms de lieux.
-  //
-  // Saint-Louis <-> St Louis
-  // Sainte-Marie <-> Ste Marie
+  // NORMALISATION DES LIEUX
   // --------------------------------------------
   normalizePlaceName(str) {
     return this.normalize(str)
@@ -88,7 +86,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : l'heure
+  // HEURE
   // --------------------------------------------
   getTime() {
     const now = new Date();
@@ -100,7 +98,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : la date
+  // DATE
   // --------------------------------------------
   getDate() {
     const now = new Date();
@@ -114,10 +112,10 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : les calculs
+  // CALCUL
   // --------------------------------------------
   calculate(expression) {
-    let expr = expression
+    let expr = String(expression || "")
       .replace(/×/g, "*")
       .replace(/÷/g, "/")
       .replace(/,/g, ".")
@@ -138,15 +136,15 @@ const NexaTools = {
       ) {
         return Math.round(result * 1000000) / 1000000;
       }
-    } catch (e) {
-      // Calcul invalide
+    } catch (error) {
+      // Expression invalide
     }
 
     return null;
   },
 
   // --------------------------------------------
-  // OUTIL : la météo (Open-Meteo, gratuit)
+  // CODES METEO
   // --------------------------------------------
   weatherCodes: {
     0: "ciel dégagé",
@@ -180,10 +178,11 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Analyse d'un lieu demandé
+  // DECOMPOSITION DU LIEU
   // --------------------------------------------
   splitPlace(input) {
-    const text = (input || "").trim();
+    const text = String(input || "")
+      .trim();
 
     if (!text) {
       return {
@@ -194,12 +193,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Virgules explicites
-    //
-    // Paris, France
-    // Paris, Texas
-    // Saint-Louis, Haut-Rhin, France
-    // Saint-Louis, 68300
+    // Virgules
     // ------------------------------------------
     if (text.includes(",")) {
       const parts = text
@@ -210,14 +204,14 @@ const NexaTools = {
         .filter(Boolean);
 
       const city = parts[0] || "";
-      const remainingParts = parts.slice(1);
-      const postalMatch = text.match(/\b\d{5}\b/);
 
-      const hintParts = remainingParts.filter(
-        function (part) {
+      const postalMatch =
+        text.match(/\b\d{5}\b/);
+
+      const hintParts =
+        parts.slice(1).filter(function (part) {
           return !/^\d{5}$/.test(part);
-        }
-      );
+        });
 
       return {
         city: city,
@@ -229,9 +223,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Code postal sans virgule
-    //
-    // Saint-Louis 68300
+    // Code postal
     // ------------------------------------------
     const postalMatch =
       text.match(/\b(\d{5})\b/);
@@ -251,27 +243,23 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Prépositions géographiques explicites
-    //
-    // Paris en France
-    // Paris dans le Texas
-    // Paris au Texas
-    // Paris aux États-Unis
+    // "en", "au", "aux", "dans"
     // ------------------------------------------
-    const match = text.match(
-      /^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i
-    );
+    const geographicMatch =
+      text.match(
+        /^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i
+      );
 
-    if (match) {
+    if (geographicMatch) {
       return {
-        city: match[1].trim(),
-        hint: match[2].trim(),
+        city: geographicMatch[1].trim(),
+        hint: geographicMatch[2].trim(),
         postalCode: ""
       };
     }
 
     // ------------------------------------------
-    // Sans virgule ni préposition
+    // Forme simple
     // ------------------------------------------
     return {
       city: text,
@@ -281,7 +269,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Normalise une précision géographique
+  // COMPOSANTS DE PRECISION
   // --------------------------------------------
   getHintParts(hint) {
     return String(hint || "")
@@ -292,10 +280,6 @@ const NexaTools = {
       .filter(Boolean);
   },
 
-  // --------------------------------------------
-  // Produit les regroupements possibles d'une
-  // précision écrite sans virgules.
-  // --------------------------------------------
   getHintComponentSets(hint) {
     const source =
       this.normalize(hint);
@@ -337,56 +321,89 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Vérifie une composante géographique
+  // TOUTES LES INFORMATIONS GEOGRAPHIQUES
+  // D'UN RESULTAT
   // --------------------------------------------
-  placeFieldMatchesComponent(
-    place,
-    component
-  ) {
-    const normalized =
-      this.normalize(component);
-
-    if (!normalized) {
-      return true;
+  getPlaceFields(place) {
+    if (!place) {
+      return [];
     }
 
-    const fields = [
+    return [
+      place.name,
       place.country,
       place.country_code,
       place.admin1,
       place.admin2,
       place.admin3,
-      place.admin4
+      place.admin4,
+      place.feature_name,
+      place.postcodes,
+      place.postal_code,
+      place.postalcode
     ]
-      .filter(Boolean)
-      .map(
-        this.normalize.bind(this)
-      );
+      .filter(function (value) {
+        return (
+          value !== undefined &&
+          value !== null &&
+          String(value).trim() !== ""
+        );
+      })
+      .map(function (value) {
+        return String(value);
+      });
+  },
 
+  // --------------------------------------------
+  // TEST D'UNE COMPOSANTE
+  // --------------------------------------------
+  placeFieldMatchesComponent(
+    place,
+    component
+  ) {
+    const normalizedComponent =
+      this.normalize(component);
+
+    if (!normalizedComponent) {
+      return true;
+    }
+
+    const fields =
+      this.getPlaceFields(place)
+        .map(
+          this.normalize.bind(this)
+        );
+
+    // Correspondance exacte
     if (
-      fields.includes(normalized)
+      fields.includes(
+        normalizedComponent
+      )
     ) {
       return true;
     }
 
+    // Correspondance contenant
     return fields.some(
       function (field) {
         return (
-          field.includes(normalized) ||
-          normalized.includes(field)
+          field.includes(
+            normalizedComponent
+          ) ||
+          normalizedComponent.includes(
+            field
+          )
         );
       }
     );
   },
 
   // --------------------------------------------
-  // Vérifie si un lieu correspond à une précision.
+  // TEST D'UNE PRECISION GEOGRAPHIQUE
   //
-  // Haut-Rhin, France
-  // Haut-Rhin France
-  // Missouri
-  // Texas
-  // États-Unis
+  // Important :
+  // chaque composante doit être retrouvée
+  // quelque part dans les informations du lieu.
   // --------------------------------------------
   placeMatchesHint(place, hint) {
     const rawHint =
@@ -396,6 +413,10 @@ const NexaTools = {
       return true;
     }
 
+    // ------------------------------------------
+    // Première méthode :
+    // parties explicites séparées par virgules
+    // ------------------------------------------
     const explicitParts =
       this.getHintParts(rawHint);
 
@@ -413,6 +434,48 @@ const NexaTools = {
       );
     }
 
+    // ------------------------------------------
+    // Deuxième méthode :
+    // texte sans virgules
+    // ------------------------------------------
+    const normalizedHint =
+      this.normalize(rawHint);
+
+    const hintWords =
+      normalizedHint.split(" ");
+
+    // Chaque mot important doit pouvoir être
+    // retrouvé dans les données géographiques.
+    const allFields =
+      this.getPlaceFields(place)
+        .map(
+          this.normalize.bind(this)
+        );
+
+    const combinedFields =
+      allFields.join(" ");
+
+    const allWordsMatch =
+      hintWords.every(
+        function (word) {
+          if (!word) {
+            return true;
+          }
+
+          return combinedFields.includes(
+            word
+          );
+        }
+      );
+
+    if (allWordsMatch) {
+      return true;
+    }
+
+    // ------------------------------------------
+    // Troisième méthode :
+    // regroupements possibles
+    // ------------------------------------------
     const componentSets =
       this.getHintComponentSets(
         rawHint
@@ -435,7 +498,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Vérifie le code postal
+  // CODE POSTAL
   // --------------------------------------------
   placeMatchesPostalCode(
     place,
@@ -466,14 +529,15 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Recherche géographique
+  // RECHERCHE GEOCODAGE
   // --------------------------------------------
   async findPlaces(
     name,
     count
   ) {
     const url =
-      "https://geocoding-api.open-meteo.com/v1/search?name=" +
+      "https://geocoding-api.open-meteo.com/v1/search" +
+      "?name=" +
       encodeURIComponent(name) +
       "&count=" +
       count +
@@ -483,9 +547,10 @@ const NexaTools = {
       await fetch(url);
 
     if (!response.ok) {
-      const error = new Error(
-        "Le service de géocodage a répondu avec une erreur."
-      );
+      const error =
+        new Error(
+          "Erreur du service de géocodage."
+        );
 
       error.code =
         "GEOCODING_HTTP_ERROR";
@@ -502,9 +567,10 @@ const NexaTools = {
         data.results
       )
     ) {
-      const error = new Error(
-        "Réponse de géocodage invalide."
-      );
+      const error =
+        new Error(
+          "Réponse de géocodage invalide."
+        );
 
       error.code =
         "GEOCODING_INVALID_RESPONSE";
@@ -516,7 +582,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Recherche géographique sécurisée
+  // RECHERCHE SECURISEE
   // --------------------------------------------
   async findPlacesSafe(
     name,
@@ -546,7 +612,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Nom exact d'une ville
+  // MATCH NOM EXACT
   // --------------------------------------------
   getExactNameMatches(
     results,
@@ -570,7 +636,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Détermine si un résultat est un lieu principal
+  // LIEU PRINCIPAL
   // --------------------------------------------
   isPrimaryPlace(place) {
     const featureCode =
@@ -588,7 +654,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Score de confiance géographique
+  // CONFIANCE
   // --------------------------------------------
   getPlaceConfidence(
     place,
@@ -658,7 +724,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Résolution intelligente d'un lieu
+  // RESOLUTION
   // --------------------------------------------
   resolvePlace(
     results,
@@ -676,7 +742,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // CAS 1 : code postal
+    // CODE POSTAL
     // ------------------------------------------
     if (
       parts.postalCode
@@ -733,7 +799,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // CAS 2 : pays / région
+    // PRECISION GEOGRAPHIQUE
     // ------------------------------------------
     if (
       parts.hint
@@ -800,7 +866,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // CAS 3 : aucun indice
+    // AUCUNE PRECISION
     // ------------------------------------------
     const exactMatches =
       self.getExactNameMatches(
@@ -888,7 +954,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Recherche d'une forme sans virgule
+  // RESOLUTION SANS VIRGULES
   // --------------------------------------------
   async resolveUnseparatedPlace(
     text
@@ -1000,7 +1066,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Une seule interprétation valide
+    // Une seule interprétation
     // ------------------------------------------
     if (
       resolvedCandidates.length === 1
@@ -1009,7 +1075,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Plusieurs coupures mais même lieu
+    // Plusieurs interprétations mais même lieu
     // ------------------------------------------
     if (
       resolvedCandidates.length > 1
@@ -1045,8 +1111,6 @@ const NexaTools = {
         return resolvedCandidates[0];
       }
 
-      // Plusieurs lieux différents :
-      // NEXA ne choisit pas arbitrairement.
       return {
         parts:
           resolvedCandidates[0]
@@ -1072,7 +1136,7 @@ const NexaTools = {
     }
 
     // ------------------------------------------
-    // Une interprétation ambiguë existe
+    // Ambiguïté détectée
     // ------------------------------------------
     if (
       ambiguousCandidates.length > 0
@@ -1084,12 +1148,13 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // Formate les candidats proposés
+  // FORMATAGE DES CANDIDATS
   // --------------------------------------------
   formatPlaceCandidates(
     candidates
   ) {
     const self = this;
+
     const unique = [];
 
     candidates.forEach(
@@ -1114,9 +1179,7 @@ const NexaTools = {
         if (
           !unique.some(
             function (item) {
-              return (
-                item.key === key
-              );
+              return item.key === key;
             }
           )
         ) {
@@ -1151,9 +1214,7 @@ const NexaTools = {
             (
               details.length
                 ? " (" +
-                  details.join(
-                    ", "
-                  ) +
+                  details.join(", ") +
                   ")"
                 : ""
             )
@@ -1164,11 +1225,11 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : météo
+  // METEO
   // --------------------------------------------
   async getWeather(city) {
     const name =
-      (city || "").trim();
+      String(city || "").trim();
 
     if (!name) {
       return (
@@ -1190,7 +1251,7 @@ const NexaTools = {
       let resolution = null;
 
       // ----------------------------------------
-      // Recherche normale
+      // RECHERCHE COMPLETE
       // ----------------------------------------
       let searchName =
         parts.city;
@@ -1222,22 +1283,29 @@ const NexaTools = {
             parts
           );
       } else {
-        results = [];
-
         resolution = {
           type: "not_found"
         };
       }
 
       // ----------------------------------------
-      // FALLBACK 1 :
-      // recherche ville seule
+      // FALLBACK IMPORTANT :
+      // rechercher uniquement la ville.
+      //
+      // Cela permet notamment :
+      // Saint-Louis, Haut-Rhin, France
+      // -> recherche Saint-Louis
+      // -> filtrage Haut-Rhin + France
       // ----------------------------------------
       if (
-        resolution.type ===
-          "not_found" &&
-        parts.hint &&
-        !parts.postalCode
+        (
+          resolution.type ===
+          "not_found"
+        ) &&
+        (
+          parts.hint ||
+          parts.postalCode
+        )
       ) {
         const citySearch =
           await this.findPlacesSafe(
@@ -1260,8 +1328,7 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // FALLBACK 2 :
-      // forme sans virgule
+      // FALLBACK SANS VIRGULES
       // ----------------------------------------
       if (
         resolution.type ===
@@ -1288,7 +1355,7 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // Lieu introuvable
+      // PAS TROUVE
       // ----------------------------------------
       if (
         resolution.type ===
@@ -1313,15 +1380,14 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // Lieu ambigu
+      // AMBIGU
       // ----------------------------------------
       if (
         resolution.type ===
         "ambiguous"
       ) {
         const candidates =
-          resolution.candidates ||
-          [];
+          resolution.candidates || [];
 
         let message =
           "Je trouve plusieurs lieux possibles pour « " +
@@ -1345,7 +1411,7 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // Lieu résolu
+      // LIEU RESOLU
       // ----------------------------------------
       const place =
         resolution.place;
@@ -1386,10 +1452,10 @@ const NexaTools = {
         );
       }
 
-      let w;
+      let weatherData;
 
       try {
-        w =
+        weatherData =
           await weatherResponse.json();
       } catch (error) {
         console.error(
@@ -1403,10 +1469,10 @@ const NexaTools = {
       }
 
       const current =
-        w.current;
+        weatherData.current;
 
       const daily =
-        w.daily;
+        weatherData.daily;
 
       if (!current) {
         return (
@@ -1421,7 +1487,7 @@ const NexaTools = {
         .filter(Boolean)
         .join(", ");
 
-      const place_name =
+      const placeName =
         place.name +
         (
           where
@@ -1439,7 +1505,7 @@ const NexaTools = {
 
       let text =
         "Météo à " +
-        place_name +
+        placeName +
         " : " +
         Math.round(
           current.temperature_2m
@@ -1489,10 +1555,10 @@ const NexaTools = {
 
       return text;
 
-    } catch (e) {
+    } catch (error) {
       console.error(
         "NexaTools.getWeather error:",
-        e
+        error
       );
 
       return (
@@ -1502,11 +1568,11 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : recherche Wikipédia
+  // WIKIPEDIA
   // --------------------------------------------
   async searchWikipedia(query) {
     const q =
-      (query || "").trim();
+      String(query || "").trim();
 
     if (!q) {
       return (
@@ -1517,14 +1583,18 @@ const NexaTools = {
     try {
       const searchUrl =
         "https://fr.wikipedia.org/w/api.php" +
-        "?action=query&list=search&srlimit=1&format=json&formatversion=2&utf8=1&origin=*" +
+        "?action=query" +
+        "&list=search" +
+        "&srlimit=1" +
+        "&format=json" +
+        "&formatversion=2" +
+        "&utf8=1" +
+        "&origin=*" +
         "&srsearch=" +
         encodeURIComponent(q);
 
       const searchResponse =
-        await fetch(
-          searchUrl
-        );
+        await fetch(searchUrl);
 
       if (
         !searchResponse.ok
@@ -1557,17 +1627,20 @@ const NexaTools = {
 
       const summaryUrl =
         "https://fr.wikipedia.org/w/api.php" +
-        "?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=3" +
-        "&redirects=1&format=json&formatversion=2&origin=*" +
+        "?action=query" +
+        "&prop=extracts" +
+        "&exintro=1" +
+        "&explaintext=1" +
+        "&exsentences=3" +
+        "&redirects=1" +
+        "&format=json" +
+        "&formatversion=2" +
+        "&origin=*" +
         "&titles=" +
-        encodeURIComponent(
-          title
-        );
+        encodeURIComponent(title);
 
       const summaryResponse =
-        await fetch(
-          summaryUrl
-        );
+        await fetch(summaryUrl);
 
       if (
         !summaryResponse.ok
@@ -1616,12 +1689,10 @@ const NexaTools = {
         extract.length > 700
       ) {
         extract =
-          extract
-            .slice(
-              0,
-              700
-            )
-            .trim() +
+          extract.slice(
+            0,
+            700
+          ).trim() +
           "…";
       }
 
@@ -1634,7 +1705,7 @@ const NexaTools = {
         link
       );
 
-    } catch (e) {
+    } catch (error) {
       return (
         "Impossible de joindre Wikipédia. Vérifiez votre connexion."
       );
@@ -1642,7 +1713,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : la liste de tâches
+  // TACHES
   // --------------------------------------------
   tasksKey: "tasks",
 
@@ -1681,17 +1752,17 @@ const NexaTools = {
   formatTasks(list) {
     return list
       .map(
-        function (t, i) {
+        function (task, index) {
           return (
-            (i + 1) +
+            (index + 1) +
             ". " +
             (
-              t.done
+              task.done
                 ? "✅"
                 : "☐"
             ) +
             " " +
-            t.text
+            task.text
           );
         }
       )
@@ -1715,15 +1786,12 @@ const NexaTools = {
     if (
       action === "add"
     ) {
-      let t =
-        (text || "")
+      let taskText =
+        String(text || "")
           .trim()
-          .slice(
-            0,
-            200
-          );
+          .slice(0, 200);
 
-      if (!t) {
+      if (!taskText) {
         return (
           "Quelle tâche voulez-vous ajouter ?"
         );
@@ -1737,24 +1805,22 @@ const NexaTools = {
         );
       }
 
-      t =
-        t.charAt(0).toUpperCase() +
-        t.slice(1);
+      taskText =
+        taskText.charAt(0).toUpperCase() +
+        taskText.slice(1);
 
       list.push({
-        text: t,
+        text: taskText,
         done: false,
         created:
           new Date().toISOString()
       });
 
-      this.saveTasks(
-        list
-      );
+      this.saveTasks(list);
 
       return (
         "C'est ajouté : « " +
-        t +
+        taskText +
         " ». Vous avez " +
         list.length +
         " tâche(s) dans votre liste."
@@ -1774,8 +1840,8 @@ const NexaTools = {
 
       const remaining =
         list.filter(
-          function (t) {
-            return !t.done;
+          function (task) {
+            return !task.done;
           }
         ).length;
 
@@ -1785,9 +1851,7 @@ const NexaTools = {
         " à faire sur " +
         list.length +
         ") :\n" +
-        this.formatTasks(
-          list
-        )
+        this.formatTasks(list)
       );
     }
 
@@ -1797,9 +1861,7 @@ const NexaTools = {
       const count =
         list.length;
 
-      this.saveTasks(
-        []
-      );
+      this.saveTasks([]);
 
       return (
         "C'est fait. J'ai vidé votre liste (" +
@@ -1845,9 +1907,7 @@ const NexaTools = {
 
         task.done = true;
 
-        this.saveTasks(
-          list
-        );
+        this.saveTasks(list);
 
         return (
           "Bien joué ! Tâche " +
@@ -1863,9 +1923,7 @@ const NexaTools = {
         1
       );
 
-      this.saveTasks(
-        list
-      );
+      this.saveTasks(list);
 
       return (
         "C'est supprimé : « " +
@@ -1882,7 +1940,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : chronomètre
+  // CHRONOMETRE
   // --------------------------------------------
   createChronometer() {
     const id =
@@ -1911,7 +1969,7 @@ const NexaTools = {
   },
 
   // --------------------------------------------
-  // OUTIL : lecture d'un fichier joint
+  // FICHIERS LOCAUX
   // --------------------------------------------
   async processLocalFile(file) {
     return new Promise(
@@ -1947,18 +2005,16 @@ const NexaTools = {
           ].includes(ext)
         ) {
           reader.onload =
-            function (e) {
+            function (event) {
               resolve({
                 name: file.name,
                 type: "text",
                 content:
-                  e.target.result
+                  event.target.result
               });
             };
 
-          reader.readAsText(
-            file
-          );
+          reader.readAsText(file);
 
         } else if (
           [
@@ -1970,18 +2026,16 @@ const NexaTools = {
           ].includes(ext)
         ) {
           reader.onload =
-            function (e) {
+            function (event) {
               resolve({
                 name: file.name,
                 type: "image",
                 content:
-                  e.target.result
+                  event.target.result
               });
             };
 
-          reader.readAsDataURL(
-            file
-          );
+          reader.readAsDataURL(file);
 
         } else {
           resolve({
@@ -1996,9 +2050,10 @@ const NexaTools = {
   }
 };
 
-// --------------------------------------------
-// On déclare les outils dans le registre
-// --------------------------------------------
+// ============================================
+// ENREGISTREMENT DES OUTILS
+// ============================================
+
 NexaTools.register(
   "heure",
   "Donne l'heure actuelle.",
@@ -2017,7 +2072,7 @@ NexaTools.register(
 
 NexaTools.register(
   "calcul",
-  "Fait un calcul mathématique (argument : expression).",
+  "Fait un calcul mathématique.",
   function (args) {
     return NexaTools.calculate(
       args.expression || ""
@@ -2027,7 +2082,7 @@ NexaTools.register(
 
 NexaTools.register(
   "meteo",
-  "Donne la météo d'une ville (argument : city).",
+  "Donne la météo d'une ville.",
   function (args) {
     return NexaTools.getWeather(
       args.city || ""
@@ -2037,7 +2092,7 @@ NexaTools.register(
 
 NexaTools.register(
   "wikipedia",
-  "Cherche un sujet sur Wikipédia et en donne un résumé (argument : query).",
+  "Cherche un sujet sur Wikipédia.",
   function (args) {
     return NexaTools.searchWikipedia(
       args.query || ""
@@ -2047,7 +2102,7 @@ NexaTools.register(
 
 NexaTools.register(
   "taches",
-  "Gère la liste de tâches (arguments : action = add, list, done, delete ou clear ; text ; number).",
+  "Gère la liste de tâches.",
   function (args) {
     return NexaTools.manageTasks(
       args.action,
@@ -2059,7 +2114,7 @@ NexaTools.register(
 
 NexaTools.register(
   "chronometre",
-  "Affiche un chronomètre interactif (Start/Stop/Reset).",
+  "Affiche un chronomètre interactif.",
   function () {
     return NexaTools.createChronometer();
   }
