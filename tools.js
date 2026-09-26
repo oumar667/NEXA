@@ -1,5 +1,5 @@
 // ============================================
-// NEXA TOOLS - version 0.8
+// NEXA TOOLS - version 0.9
 // Les capacités de NEXA.
 // Registre d'outils : heure, date, calcul,
 // météo, Wikipédia, tâches, chronomètre,
@@ -7,7 +7,7 @@
 // ============================================
 
 const NexaTools = {
-  version: "0.8",
+  version: "0.9",
 
   // --------------------------------------------
   // LE REGISTRE : la liste des outils disponibles
@@ -175,26 +175,41 @@ const NexaTools = {
       };
     }
 
+    // ------------------------------------------
     // Exemple :
     // Paris, France
+    // Paris, Texas
+    // Saint-Louis, Haut-Rhin, France
     // Saint-Louis, 68300
+    // ------------------------------------------
     if (text.includes(",")) {
-      const parts = text.split(",");
+      const parts = text
+        .split(",")
+        .map(function (part) {
+          return part.trim();
+        })
+        .filter(Boolean);
 
-      const city = parts[0].trim();
-      const hint = parts.slice(1).join(" ").trim();
+      const city = parts[0] || "";
+      const remainingParts = parts.slice(1);
 
-      const postalMatch = hint.match(/\b\d{5}\b/);
+      const postalMatch = text.match(/\b\d{5}\b/);
+
+      const hintParts = remainingParts.filter(function (part) {
+        return !/^\d{5}$/.test(part);
+      });
 
       return {
         city: city,
-        hint: hint,
+        hint: hintParts.join(", ").trim(),
         postalCode: postalMatch ? postalMatch[0] : ""
       };
     }
 
+    // ------------------------------------------
     // Exemple :
     // Saint-Louis 68300
+    // ------------------------------------------
     const postalMatch = text.match(/\b(\d{5})\b/);
 
     if (postalMatch) {
@@ -208,10 +223,12 @@ const NexaTools = {
       };
     }
 
+    // ------------------------------------------
     // Exemple :
     // Paris en France
     // Paris dans le Texas
     // Paris au Texas
+    // ------------------------------------------
     const match = text.match(
       /^(.+)\s+(?:en|au|aux|dans)\s+(?:(?:le|la|les)\s+|l')?(.+)$/i
     );
@@ -232,28 +249,44 @@ const NexaTools = {
   },
 
   // --------------------------------------------
+  // Normalise une précision géographique
+  // --------------------------------------------
+  getHintParts(hint) {
+    return String(hint || "")
+      .split(",")
+      .map(function (part) {
+        return part.trim();
+      })
+      .filter(Boolean);
+  },
+
+  // --------------------------------------------
   // Vérifie si un lieu correspond à une précision
+  //
+  // Une précision peut être :
+  // France
+  // Texas
+  // Missouri
+  // Haut-Rhin, France
+  // New York, États-Unis
+  // etc.
   // --------------------------------------------
   placeMatchesHint(place, hint) {
-    const h = this.normalize(hint);
+    const rawHint = String(hint || "").trim();
 
-    if (!h) {
+    if (!rawHint) {
       return true;
     }
 
-    if (
-      h.length === 2 &&
-      this.normalize(place.country_code) === h
-    ) {
-      return true;
-    }
+    const hintParts = this.getHintParts(rawHint);
 
-    if (h.length < 3) {
-      return false;
+    if (hintParts.length === 0) {
+      return true;
     }
 
     const fields = [
       place.country,
+      place.country_code,
       place.admin1,
       place.admin2,
       place.admin3,
@@ -262,8 +295,34 @@ const NexaTools = {
       .filter(Boolean)
       .map(this.normalize.bind(this));
 
-    return fields.some(function (field) {
-      return field === h || field.includes(h);
+    return hintParts.every(function (part) {
+      const normalizedPart = this.normalize(part);
+
+      if (!normalizedPart) {
+        return true;
+      }
+
+      // Code pays ISO
+      if (
+        normalizedPart.length === 2 &&
+        fields.includes(normalizedPart)
+      ) {
+        return true;
+      }
+
+      // Correspondance exacte
+      if (fields.includes(normalizedPart)) {
+        return true;
+      }
+
+      // Correspondance partielle pour certains
+      // noms administratifs longs.
+      return fields.some(function (field) {
+        return (
+          field.includes(normalizedPart) ||
+          normalizedPart.includes(field)
+        );
+      });
     });
   },
 
@@ -346,12 +405,6 @@ const NexaTools = {
 
   // --------------------------------------------
   // Score de confiance géographique
-  //
-  // IMPORTANT :
-  // Ce score ne sert pas à choisir arbitrairement
-  // entre deux lieux similaires.
-  // Il permet uniquement d'identifier un résultat
-  // clairement dominant.
   // --------------------------------------------
   getPlaceConfidence(place, name, results) {
     const normalizedName = this.normalize(name);
@@ -359,12 +412,10 @@ const NexaTools = {
 
     let score = 0;
 
-    // Nom exactement identique
     if (normalizedPlaceName === normalizedName) {
       score += 100;
     }
 
-    // Résultat classé en premier par le géocodeur
     const index = results.indexOf(place);
 
     if (index === 0) {
@@ -373,12 +424,10 @@ const NexaTools = {
       score += 5;
     }
 
-    // Grande ville / capitale / centre administratif
     if (this.isPrimaryPlace(place)) {
       score += 25;
     }
 
-    // Population
     const population = Number(place.population || 0);
 
     if (population >= 1000000) {
@@ -417,6 +466,21 @@ const NexaTools = {
         );
       });
 
+      const exactPostalNameMatches =
+        postalMatches.filter(function (place) {
+          return (
+            self.normalize(place.name) ===
+            self.normalize(parts.city)
+          );
+        });
+
+      if (exactPostalNameMatches.length === 1) {
+        return {
+          type: "resolved",
+          place: exactPostalNameMatches[0]
+        };
+      }
+
       if (postalMatches.length === 1) {
         return {
           type: "resolved",
@@ -447,6 +511,32 @@ const NexaTools = {
         );
       });
 
+      const exactMatches = self.getExactNameMatches(
+        hintMatches,
+        parts.city
+      );
+
+      // Nom exact + précision = résolution seulement
+      // si le lieu est unique.
+      if (exactMatches.length === 1) {
+        return {
+          type: "resolved",
+          place: exactMatches[0]
+        };
+      }
+
+      // Plusieurs lieux portent le même nom dans
+      // la zone demandée : on ne devine pas.
+      if (exactMatches.length > 1) {
+        return {
+          type: "ambiguous",
+          candidates: exactMatches
+        };
+      }
+
+      // Si aucun nom exact n'existe mais qu'un seul
+      // résultat correspond à la précision, il peut
+      // être accepté.
       if (hintMatches.length === 1) {
         return {
           type: "resolved",
@@ -455,18 +545,6 @@ const NexaTools = {
       }
 
       if (hintMatches.length > 1) {
-        const exactMatches = self.getExactNameMatches(
-          hintMatches,
-          parts.city
-        );
-
-        if (exactMatches.length === 1) {
-          return {
-            type: "resolved",
-            place: exactMatches[0]
-          };
-        }
-
         return {
           type: "ambiguous",
           candidates: hintMatches
@@ -486,7 +564,7 @@ const NexaTools = {
       parts.city
     );
 
-    // Un seul nom exact = aucune ambiguïté
+    // Un seul nom exact
     if (exactMatches.length === 1) {
       return {
         type: "resolved",
@@ -503,8 +581,6 @@ const NexaTools = {
         };
       }
 
-      // Plusieurs résultats mais aucun nom exact :
-      // on ne devine pas.
       return {
         type: "ambiguous",
         candidates: results
@@ -533,14 +609,6 @@ const NexaTools = {
     const best = scored[0];
     const second = scored[1];
 
-    // Un seul résultat dominant avec un écart important.
-    //
-    // Exemple :
-    // Paris, France
-    // vs Paris, Texas
-    // vs Paris, Tennessee
-    //
-    // On peut reconnaître Paris comme résultat principal.
     if (
       best &&
       (!second ||
@@ -552,8 +620,6 @@ const NexaTools = {
       };
     }
 
-    // Si deux résultats restent suffisamment proches,
-    // NEXA demande une précision au lieu de deviner.
     return {
       type: "ambiguous",
       candidates: exactMatches
@@ -573,6 +639,8 @@ const NexaTools = {
         self.normalize(place.name) +
         "|" +
         self.normalize(place.admin1 || "") +
+        "|" +
+        self.normalize(place.admin2 || "") +
         "|" +
         self.normalize(place.country || "");
 
@@ -627,11 +695,27 @@ const NexaTools = {
       }
 
       // ----------------------------------------
-      // On récupère suffisamment de résultats
-      // pour pouvoir détecter une ambiguïté.
+      // IMPORTANT :
+      // Si l'utilisateur donne une précision,
+      // elle est maintenant envoyée directement
+      // au géocodeur.
+      //
+      // Exemples :
+      // Paris, Texas
+      // Saint-Louis, Missouri
+      // Saint-Louis, Haut-Rhin, France
       // ----------------------------------------
+      let searchName = parts.city;
+
+      if (parts.hint) {
+        searchName =
+          parts.city +
+          ", " +
+          parts.hint;
+      }
+
       const results = await this.findPlaces(
-        parts.city,
+        searchName,
         50
       );
 
