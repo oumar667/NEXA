@@ -185,6 +185,10 @@ const NexaAgent = {
 
     locationsText = locationsText
       .replace(
+        /\s+(?:en fonction de|selon|par rapport à|comparé(?:e)? à|compare(?:e)? à|au niveau de|pour)\s+(?:la|le|les|l')\s+(?:température|météo|temps|vent|pluie|précipitations|humidité|condition(?:s)? météo(?:rologique)?s?)\s*$/i,
+        ""
+      )
+      .replace(
         /\s+(?:aujourd'hui|aujourd’hui|demain|ce soir|maintenant)$/i,
         ""
       )
